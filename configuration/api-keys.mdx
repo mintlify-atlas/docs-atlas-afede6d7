@@ -1,0 +1,175 @@
+---
+title: "Configure API keys for Claude, ChatGPT, and Gemini"
+description: "Set up Anthropic, OpenAI, and Google API keys so Claude, ChatGPT, and Gemini run as standalone A2A agent servers you can install in OpenBeavs."
+---
+
+Each LLM provider in OpenBeavs runs as a standalone A2A (Agent-to-Agent) server on its own port. To make a provider available in the chat model selector and Arena mode, you create an API key with that provider, add it to the agent's `.env` file, start the agent server locally, and then install it through **Workspace > Agents** in the OpenBeavs UI.
+
+<Note>
+  API keys are stored only in each agent's `.env` file, which is gitignored and never committed to the repository. Never share or commit these keys.
+</Note>
+
+## Provider setup
+
+<Tabs>
+  <Tab title="Anthropic">
+    <Steps>
+      <Step title="Get your API key">
+        1. Go to [console.anthropic.com](https://console.anthropic.com) and sign in.
+        2. In the left sidebar, click **API Keys**.
+        3. Click **Create Key**, give it a name (e.g. `openbeavs-local`), and click **Create API Key**.
+        4. Copy the key — it starts with `sk-ant-`.
+
+        <Warning>
+          You will not be able to see the key again after closing the dialog. Copy it now.
+        </Warning>
+      </Step>
+
+      <Step title="Add the key to the agent's .env file">
+        Open or create `agents/claude-agent/.env` and add:
+
+        ```bash agents/claude-agent/.env
+        ANTHROPIC_API_KEY='sk-ant-YOUR_KEY_HERE'
+        ```
+      </Step>
+
+      <Step title="Start the agent server">
+        From the repository root, run:
+
+        ```bash
+        cd agents/claude-agent
+        conda run -n open-webui python agent.py
+        ```
+
+        The server starts on **port 8002**.
+      </Step>
+
+      <Step title="Install the agent in OpenBeavs">
+        Go to **Workspace > Agents** → click **+** → enter `http://localhost:8002` → click **Add**.
+
+        <Info>
+          The agent server must be running before you click **Add**. If it is not running, you will see: `Error fetching agent's .well-known/agent.json`.
+        </Info>
+      </Step>
+    </Steps>
+
+    **Available models**
+
+    | Model ID | Notes |
+    |---|---|
+    | `claude-sonnet-4-6` | Default |
+    | `claude-opus-4-6` | |
+    | `claude-haiku-4-5-20251001` | |
+    | `claude-3-5-sonnet-20241022` | |
+    | `claude-3-5-haiku-20241022` | |
+  </Tab>
+
+  <Tab title="OpenAI">
+    <Steps>
+      <Step title="Get your API key">
+        1. Go to [platform.openai.com](https://platform.openai.com) and sign in.
+        2. In the left sidebar, click **API keys**.
+        3. Click **Create new secret key**, give it a name, and click **Create secret key**.
+        4. Copy the key — it starts with `sk-`.
+
+        <Warning>
+          You will not be able to see the key again after closing the dialog. Copy it now.
+        </Warning>
+      </Step>
+
+      <Step title="Add the key to the agent's .env file">
+        Open or create `agents/chatgpt-agent/.env` and add:
+
+        ```bash agents/chatgpt-agent/.env
+        CHATGPT_API_KEY='sk-YOUR_KEY_HERE'
+        ```
+      </Step>
+
+      <Step title="Start the agent server">
+        From the repository root, run:
+
+        ```bash
+        cd agents/chatgpt-agent
+        conda run -n open-webui python agent.py
+        ```
+
+        The server starts on **port 8003**.
+      </Step>
+
+      <Step title="Install the agent in OpenBeavs">
+        Go to **Workspace > Agents** → click **+** → enter `http://localhost:8003` → click **Add**.
+
+        <Info>
+          The agent server must be running before you click **Add**. If it is not running, you will see: `Error fetching agent's .well-known/agent.json`.
+        </Info>
+      </Step>
+    </Steps>
+
+    **Available models**
+
+    | Model ID | Notes |
+    |---|---|
+    | `gpt-4o` | Default |
+    | `gpt-4o-mini` | |
+    | `gpt-5.2` | |
+    | `gpt-5.2-chat-latest` | |
+    | `gpt-5.2-pro` | |
+  </Tab>
+
+  <Tab title="Google">
+    <Steps>
+      <Step title="Get your API key">
+        1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with your Google account.
+        2. Click **Get API key** in the left sidebar.
+        3. Click **Create API key**, select a Google Cloud project, and click **Create API key in existing project**.
+        4. Copy the key — it starts with `AIza`.
+      </Step>
+
+      <Step title="Add the key to the agent's .env file">
+        Open or create `agents/gemini-agent/.env` and add:
+
+        ```bash agents/gemini-agent/.env
+        GEMINI_API_KEY='AIza-YOUR_KEY_HERE'
+        ```
+      </Step>
+
+      <Step title="Start the agent server">
+        From the repository root, run:
+
+        ```bash
+        cd agents/gemini-agent
+        conda run -n open-webui python agent.py
+        ```
+
+        The server starts on **port 8004**.
+      </Step>
+
+      <Step title="Install the agent in OpenBeavs">
+        Go to **Workspace > Agents** → click **+** → enter `http://localhost:8004` → click **Add**.
+
+        <Info>
+          The agent server must be running before you click **Add**. If it is not running, you will see: `Error fetching agent's .well-known/agent.json`.
+        </Info>
+      </Step>
+    </Steps>
+
+    **Available models**
+
+    | Model ID | Notes |
+    |---|---|
+    | `gemini-2.0-flash` | Default |
+    | `gemini-2.5-pro` | |
+    | `gemini-2.5-flash` | |
+    | `gemini-2.0-flash-lite` | |
+    | `gemini-1.5-pro` | |
+    | `gemini-1.5-flash` | |
+  </Tab>
+</Tabs>
+
+## After installation
+
+Once an agent is successfully added, it appears in the chat model selector and in Arena mode. You can install all three providers and switch between them at any time from the chat interface.
+
+<Tip>
+  For testing purposes, API keys for Claude and ChatGPT are held by Long Tran. Contact via email or Discord if you need temporary access.
+</Tip>

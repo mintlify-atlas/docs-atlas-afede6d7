@@ -1,0 +1,370 @@
+---
+title: "Agents API: install and manage A2A agents"
+description: "Register, list, and manage A2A agents installed in your OpenBeavs hub. Covers manual registration, URL-based registration, and well-known card fetching."
+---
+
+The Agents API manages the set of A2A agents that are actively installed in your OpenBeavs hub instance. You can register agents manually by supplying their metadata, or auto-register them by pointing the hub at any A2A-compliant agent's base URL — the hub fetches the `/.well-known/agent.json` discovery card and populates the agent record automatically. All production endpoints require a valid Bearer token.
+
+<Note>
+The prototype backend (`localhost:8000`) exposes agents at `/agents`. The production backend (`localhost:8080`) exposes the same functionality at `/api/agents`. The field shapes are identical; only the path and authentication requirements differ.
+</Note>
+
+---
+
+## GET /api/agents
+
+Returns every active agent registered in the hub.
+
+```bash
+curl http://localhost:8080/api/agents \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`, array of agent objects:
+
+```json
+[
+  {
+    "id": "3f2e1a...",
+    "name": "Cyrano de Bergerac",
+    "description": "A poetic assistant that responds with eloquent, flowery language",
+    "endpoint": "http://localhost:8001",
+    "url": "http://localhost:8001",
+    "version": "1.0.0",
+    "capabilities": { "streaming": true },
+    "skills": [],
+    "default_input_modes": ["text"],
+    "default_output_modes": ["text"],
+    "profile_image_url": "/static/favicon.png",
+    "is_active": true,
+    "created_at": 1714000000
+  }
+]
+```
+
+<ResponseField name="id" type="string">
+  UUID string uniquely identifying this agent in the hub.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Human-readable display name of the agent.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Brief description of what the agent does.
+</ResponseField>
+
+<ResponseField name="endpoint" type="string">
+  The A2A JSON-RPC POST URL used to send messages to the agent. Takes precedence over `url` when routing messages.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The agent's base homepage URL. Used as a fallback when `endpoint` is absent.
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  Agent version string (e.g. `"1.0.0"`).
+</ResponseField>
+
+<ResponseField name="capabilities" type="object">
+  Capability flags declared by the agent.
+  <Expandable title="properties">
+    <ResponseField name="streaming" type="boolean">
+      Whether the agent supports streaming responses.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="skills" type="array">
+  List of skill objects declared in the agent's discovery card.
+</ResponseField>
+
+<ResponseField name="default_input_modes" type="array of strings">
+  Input modalities the agent accepts (e.g. `["text"]`).
+</ResponseField>
+
+<ResponseField name="default_output_modes" type="array of strings">
+  Output modalities the agent produces (e.g. `["text"]`).
+</ResponseField>
+
+<ResponseField name="is_active" type="boolean">
+  Whether the agent is currently enabled in the hub.
+</ResponseField>
+
+<ResponseField name="created_at" type="integer">
+  Unix timestamp (seconds) when the agent was registered.
+</ResponseField>
+
+---
+
+## POST /api/agents/register
+
+Manually registers an agent by providing its metadata directly. Use this when the agent does not expose a `/.well-known/agent.json` endpoint.
+
+**Request body** (`RegisterAgentForm`):
+
+<ParamField body="name" type="string" required>
+  Display name for the agent.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Short description of the agent's purpose.
+</ParamField>
+
+<ParamField body="endpoint" type="string">
+  The A2A JSON-RPC POST endpoint URL. The hub will POST messages to this URL.
+</ParamField>
+
+<ParamField body="input_schema" type="object">
+  JSON Schema describing the expected input format. Defaults to `{"type": "object", "properties": {"message": {"type": "string"}}}`.
+</ParamField>
+
+<ParamField body="output_schema" type="object">
+  JSON Schema describing the response format.
+</ParamField>
+
+<CodeGroup>
+```bash Production
+curl -X POST http://localhost:8080/api/agents/register \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Weather Expert",
+    "description": "Answers weather questions for any location",
+    "endpoint": "http://localhost:8005"
+  }'
+```
+
+```bash Prototype
+curl -X POST http://localhost:8000/agents/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Weather Expert",
+    "description": "Answers weather questions for any location",
+    "endpoint": "http://localhost:8005"
+  }'
+```
+</CodeGroup>
+
+**Response** — `200 OK`, the newly created agent object (same shape as the list response above).
+
+---
+
+## POST /api/agents/register-by-url
+
+Registers an agent by fetching its `/.well-known/agent.json` discovery card. The hub normalises the supplied URL to its origin, appends `/.well-known/agent.json`, fetches it, and creates the agent record from the card's fields.
+
+<Warning>
+If an agent with the same `url` is already registered, the production backend returns `400 Bad Request` with detail `"An agent with this URL is already registered"`. The prototype does not perform this duplicate check.
+</Warning>
+
+**Request body** (`RegisterAgentByUrlForm`):
+
+<ParamField body="agent_url" type="string" required>
+  The agent's base URL (e.g. `http://localhost:8001`) or full well-known URL. The hub automatically normalises this to the origin and appends `/.well-known/agent.json`.
+</ParamField>
+
+<ParamField body="profile_image_url" type="string">
+  Optional override for the agent's avatar. Falls back to the card's `profileImageUrl` or the hub's default favicon.
+</ParamField>
+
+<CodeGroup>
+```bash Production
+curl -X POST http://localhost:8080/api/agents/register-by-url \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_url": "http://localhost:8001"}'
+```
+
+```bash Prototype
+curl -X POST http://localhost:8000/agents/register-by-url \
+  -H "Content-Type: application/json" \
+  -d '{"agent_url": "http://localhost:8001"}'
+```
+</CodeGroup>
+
+**Response** — `200 OK`, the newly created agent object.
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `400` | `"Agent URL is required"` | Empty `agent_url` field. |
+| `400` | `"An agent with this URL is already registered"` | Duplicate URL (production only). |
+| `400` | `"Error fetching agent's .well-known/agent.json file: ..."` | Network error reaching the agent. |
+| `400` | `"Invalid JSON response from agent: ..."` | The agent's well-known endpoint returned invalid JSON. |
+
+---
+
+## GET /api/agents/fetch-well-known
+
+Fetches and returns an agent's `/.well-known/agent.json` card without persisting anything. Useful for previewing an agent before committing to registration.
+
+**Query parameters:**
+
+<ParamField query="agent_url" type="string" required>
+  The agent's base URL. The hub normalises this to the origin and fetches `/.well-known/agent.json`.
+</ParamField>
+
+<CodeGroup>
+```bash Production
+curl "http://localhost:8080/api/agents/fetch-well-known?agent_url=http://localhost:8001" \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+```bash Prototype
+curl "http://localhost:8000/agents/fetch-well-known?agent_url=http://localhost:8001"
+```
+</CodeGroup>
+
+**Response** — `200 OK`, the raw discovery card JSON as returned by the agent (see the [A2A Discovery](/api/a2a-discovery) page for the full schema).
+
+---
+
+## GET /api/agents/{agent_id}
+
+Returns a single agent by its UUID.
+
+<ParamField path="agent_id" type="string" required>
+  The UUID of the agent to retrieve.
+</ParamField>
+
+```bash
+curl http://localhost:8080/api/agents/3f2e1a... \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+Returns `404 Not Found` if the agent does not exist.
+
+---
+
+## DELETE /api/agents/{agent_id}
+
+Removes an agent from the hub. Only the agent's owner or an admin can delete it.
+
+<ParamField path="agent_id" type="string" required>
+  The UUID of the agent to delete.
+</ParamField>
+
+```bash
+curl -X DELETE http://localhost:8080/api/agents/3f2e1a... \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`:
+
+```json
+{"success": true, "message": "Agent deleted successfully"}
+```
+
+---
+
+## PATCH /api/agents/{agent_id}
+
+Updates an existing agent's mutable fields. Only the agent's owner or an admin may call this. Uses `exclude_unset` semantics — only fields you include in the body are changed.
+
+<ParamField path="agent_id" type="string" required>
+  The UUID of the agent to update.
+</ParamField>
+
+**Request body** (`AgentUpdateForm`) — all fields optional:
+
+<ParamField body="name" type="string">
+  New display name for the agent.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Updated description.
+</ParamField>
+
+<ParamField body="endpoint" type="string">
+  New A2A JSON-RPC POST endpoint URL.
+</ParamField>
+
+<ParamField body="is_active" type="boolean">
+  Set to `false` to disable the agent without deleting it. Disabled agents are excluded from `GET /api/agents` (active-only list) but still appear in `GET /api/agents/all` (admin).
+</ParamField>
+
+```bash
+curl -X PATCH http://localhost:8080/api/agents/3f2e1a... \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"endpoint": "https://myagent.example.com", "is_active": true}'
+```
+
+**Response** — `200 OK`, the updated agent object.
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `404` | `NOT_FOUND` | No agent with the given ID. |
+| `401` | `UNAUTHORIZED` | Caller is not the owner or an admin. |
+
+---
+
+## POST /api/agents/deploy
+
+Creates an internally-hosted A2A agent powered by a system prompt. The hub itself serves this agent — no external service is required. Admin-only endpoint.
+
+<Note>
+  Internally-hosted agents are served at `POST /api/agents/{agent_id}/internal-a2a` on the hub. Their discovery card is available at `GET /api/agents/{agent_id}/internal-a2a/.well-known/agent.json`.
+</Note>
+
+**Request body** (`DeployAgentForm`):
+
+<ParamField body="name" type="string" required>
+  Display name for the agent.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Short description of what the agent does.
+</ParamField>
+
+<ParamField body="system_prompt" type="string" required>
+  The system prompt that defines the agent's personality, knowledge, and constraints.
+</ParamField>
+
+<ParamField body="provider" type="string" default="anthropic">
+  LLM provider to back this agent. Supported values: `"anthropic"`, `"openai"`, `"google"`.
+</ParamField>
+
+<ParamField body="model" type="string">
+  Optional. Specific model ID to use. Defaults to the provider's recommended model if omitted.
+</ParamField>
+
+<ParamField body="profile_image_url" type="string">
+  Optional avatar URL for the agent's listing.
+</ParamField>
+
+<ParamField body="publish_to_registry" type="boolean" default="true">
+  When `true`, also creates a public registry entry so other users can discover and install the agent.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:8080/api/agents/deploy \
+  -H "Authorization: Bearer <your-admin-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "OSU Advisor",
+    "description": "Answers questions about OSU academic programs",
+    "system_prompt": "You are an expert on Oregon State University academics...",
+    "provider": "anthropic",
+    "publish_to_registry": true
+  }'
+```
+
+**Response** — `200 OK`, the created `AgentModel` with `deployment_mode: "internal"` and an auto-generated `endpoint` URL pointing to the hub's internal JSON-RPC handler.
+
+---
+
+## GET /api/agents/all (admin only)
+
+Returns all agents including inactive ones. Requires admin role.
+
+```bash
+curl http://localhost:8080/api/agents/all \
+  -H "Authorization: Bearer <your-admin-api-key>"
+```
+
+Returns the same shape as `GET /api/agents` but includes agents where `is_active: false`.

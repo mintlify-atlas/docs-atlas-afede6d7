@@ -1,0 +1,221 @@
+---
+title: "Registry API: publish and discover agents publicly"
+description: "Browse, submit, update, and delete agents in the OpenBeavs public registry — a discoverable showcase distinct from locally installed hub agents."
+---
+
+The Registry API manages a public catalogue of A2A agents that any user on the hub can browse and discover. Submitting an agent to the registry does not install it for active use — that is handled by the [Agents API](/api/agents). Think of the registry as a directory or app store: it stores metadata about agents so others can find them, while the Agents API represents what is actively running in your specific hub instance.
+
+<Info>
+**Registry vs Agents — key distinction:**  
+`/api/registry` = public showcase of agents others can discover.  
+`/api/agents` = agents installed and active in your hub instance.  
+An agent can exist in one without the other.
+</Info>
+
+All registry endpoints require a valid Bearer token. Updates and deletes additionally require that the caller is either the entry's owner or an admin.
+
+---
+
+## GET /api/registry
+
+Returns all registry entries visible to the authenticated user. Visibility is determined by each entry's `access_control` field: `null` means public, `{}` means owner-only, and custom permission objects can restrict access to specific groups.
+
+```bash
+curl http://localhost:8080/api/registry \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`, array of registry agent objects:
+
+```json
+[
+  {
+    "id": "b4c9d1...",
+    "user_id": "a1b2c3...",
+    "url": "https://hello-world-gxfr.onrender.com",
+    "name": "Hello World Agent",
+    "description": "A simple echo agent for demonstration purposes",
+    "image_url": "https://example.com/icon.png",
+    "foundational_model": "google/gemini-2.5-flash",
+    "tools": {
+      "capabilities": {"streaming": true},
+      "skills": [{"id": "echo", "name": "Echo", "tags": ["demo"]}]
+    },
+    "access_control": null,
+    "created_at": 1714000000,
+    "updated_at": 1714000000
+  }
+]
+```
+
+<ResponseField name="id" type="string">
+  UUID string identifying this registry entry.
+</ResponseField>
+
+<ResponseField name="user_id" type="string">
+  UUID of the user who submitted this entry.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The agent's base URL. Must be unique across the registry.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Agent display name, populated from the agent's `/.well-known/agent.json` card.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Agent description, populated from the discovery card.
+</ResponseField>
+
+<ResponseField name="image_url" type="string">
+  URL to the agent's avatar or icon.
+</ResponseField>
+
+<ResponseField name="foundational_model" type="string">
+  The underlying AI model powering this agent (e.g. `"google/gemini-2.5-flash"`).
+</ResponseField>
+
+<ResponseField name="tools" type="object">
+  A summary of capabilities and skills extracted from the discovery card.
+  <Expandable title="properties">
+    <ResponseField name="capabilities" type="object">
+      Capability flags (e.g. `{"streaming": true}`).
+    </ResponseField>
+    <ResponseField name="skills" type="array">
+      List of skill objects from the agent card.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="access_control" type="object | null">
+  Visibility settings. `null` = public, `{}` = owner-only, custom object = group-restricted.
+</ResponseField>
+
+<ResponseField name="created_at" type="integer">
+  Unix timestamp (seconds) when the entry was submitted.
+</ResponseField>
+
+<ResponseField name="updated_at" type="integer">
+  Unix timestamp (seconds) of the last update.
+</ResponseField>
+
+---
+
+## POST /api/registry
+
+Submits a new agent to the public registry. The hub fetches the agent's `/.well-known/agent.json` card from the supplied URL to populate the entry's name, description, capabilities, and skills automatically.
+
+**Request body** (`SubmitRegistryAgentForm`):
+
+<ParamField body="url" type="string" required>
+  The agent's base URL. The hub normalises this to its origin and fetches `/.well-known/agent.json` to populate registry metadata.
+</ParamField>
+
+<ParamField body="foundational_model" type="string">
+  Optional. The underlying AI model identifier (e.g. `"google/gemini-2.5-flash"`). Displayed in the registry listing to help users understand what powers the agent.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  Optional. URL to a custom avatar for the registry listing. Falls back to the image URL in the agent's discovery card if not supplied.
+</ParamField>
+
+<ParamField body="access_control" type="object">
+  Optional. Visibility rules for the entry. Omit or set to `null` for public access. Set to `{}` to make the entry private (owner-only). Provide a group-permission object to restrict to specific user groups.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:8080/api/registry \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://hello-world-gxfr.onrender.com",
+    "foundational_model": "google/gemini-2.5-flash",
+    "access_control": null
+  }'
+```
+
+**Response** — `200 OK`, the newly created registry entry object (same shape as the list response above).
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `400` | `"Agent URL is required"` | Missing `url` in request body. |
+| `400` | `"Error fetching agent's .well-known/agent.json file: ..."` | Network error reaching the agent. |
+| `400` | `"Invalid JSON response from agent: ..."` | The agent's well-known endpoint returned invalid JSON. |
+
+---
+
+## PUT /api/registry/{id}
+
+Updates a registry entry. Only the entry's owner or an admin may call this endpoint. Fields not included in the request body are left unchanged (`exclude_unset` semantics).
+
+<ParamField path="id" type="string" required>
+  The UUID of the registry entry to update.
+</ParamField>
+
+**Request body** (`UpdateRegistryAgentForm`) — all fields are optional:
+
+<ParamField body="name" type="string">
+  Override the agent's display name.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Override the agent's description.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  Override the agent's avatar URL.
+</ParamField>
+
+<ParamField body="access_control" type="object">
+  Update visibility settings. Set to `null` for public, `{}` for owner-only, or a permission object for group-restricted access.
+</ParamField>
+
+```bash
+curl -X PUT http://localhost:8080/api/registry/b4c9d1... \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated description for the registry listing",
+    "access_control": null
+  }'
+```
+
+**Response** — `200 OK`, the updated registry entry.
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `404` | `NOT_FOUND` | No registry entry with the given ID. |
+| `401` | `UNAUTHORIZED` | Caller is not the owner or an admin. |
+
+---
+
+## DELETE /api/registry/{id}
+
+Removes a registry entry. Only the entry's owner or an admin may call this endpoint.
+
+<ParamField path="id" type="string" required>
+  The UUID of the registry entry to delete.
+</ParamField>
+
+```bash
+curl -X DELETE http://localhost:8080/api/registry/b4c9d1... \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`:
+
+```json
+{"success": true}
+```
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `404` | `NOT_FOUND` | No registry entry with the given ID. |
+| `401` | `UNAUTHORIZED` | Caller is not the owner or an admin. |

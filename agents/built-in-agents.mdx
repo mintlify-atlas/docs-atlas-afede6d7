@@ -1,0 +1,335 @@
+---
+title: "Built-in agents: Cyrano, OSU Expert, and more"
+description: "Reference for every agent that ships with OpenBeavs — what each one does, its default port, required environment variables, and how to start it."
+---
+
+OpenBeavs ships with five standalone agents in the `agents/` directory. Each is independently deployable, speaks the A2A protocol, and can be registered with any hub instance. The prototype backend (`back/main.py`) pre-populates four of them by default on startup so you can start chatting immediately without manual registration.
+
+<Tabs>
+  <Tab title="Oregon State Expert">
+    ## Oregon State Expert
+
+    **Directory:** `agents/oregon-state-expert/`  
+    **Default port:** `8002`  
+    **Model:** Gemini 1.5 Pro  
+    **Tools:** Google Search (real-time retrieval)
+
+    The Oregon State Expert is a Gemini-powered agent with a Google Search tool, giving it access to current information about Oregon State University. It answers questions about academics, research programs, athletics, campus life, and anything else OSU-related.
+
+    ### Start the agent
+
+    ```bash
+    cd agents/oregon-state-expert
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env   # add GEMINI_API_KEY
+    uvicorn agent.agent:a2a_app --host localhost --port 8002
+    ```
+
+    Verify the discovery card:
+
+    ```bash
+    curl http://localhost:8002/.well-known/agent-card.json
+    ```
+
+    ### Environment variables
+
+    ```text .env.example
+    GEMINI_API_KEY="YOUR_API_KEY_HERE"
+    OREGON_STATE_MODEL="gemini-1.5-pro-latest"   # optional override
+    ```
+
+    ### Add to OpenBeavs
+
+    Register via the UI (**Workspace > Agents > +**) using URL `http://localhost:8002`, or via API:
+
+    ```bash
+    curl -X POST http://localhost:8080/api/agents/register-by-url \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"agent_url": "http://localhost:8002"}'
+    ```
+
+    ### Example queries
+
+    - "What is Oregon State University known for?"
+    - "Tell me about OSU's engineering programs"
+    - "What sports does OSU compete in?"
+    - "What's the mascot and school colors?"
+
+    ### Deploy to GCP
+
+    ```bash
+    cd agents
+    python deploy_agent.py oregon-state-expert
+    ```
+  </Tab>
+
+  <Tab title="Cyrano de Bergerac">
+    ## Cyrano de Bergerac
+
+    **Directory:** `agents/Cyrano-de-Bergerac/`  
+    **Default port:** `8001`  
+    **Model:** Gemini (configurable via `CHRIS_MODEL` and `CYRANO_MODEL`)  
+    **Architecture:** Multi-agent pipeline (`SequentialAgent`)
+
+    Cyrano is a multi-agent system inspired by the play. It chains two sub-agents in sequence using the Google ADK `SequentialAgent`:
+
+    1. **chris** (`chris/agent.py`) — accepts the user's input and performs tone analysis, classifying the emotional register (formal, angry, happy, etc.). Outputs a JSON object with the original text and determined tone.
+    2. **cyrano** (`cyrano/agent.py`) — receives chris's JSON output and crafts an eloquent reply matched to the detected tone.
+    3. **orchestrator** (`orchestrator/agent.py`) — the `SequentialAgent` that runs chris → cyrano and exposes the combined pipeline as a single A2A endpoint.
+
+    From the hub's perspective this is one agent at one URL. The internal routing is transparent.
+
+    ### Start the agent
+
+    ```bash
+    cd agents/Cyrano-de-Bergerac
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env   # add GEMINI_API_KEY, CHRIS_MODEL, CYRANO_MODEL
+    uvicorn orchestrator.agent:a2a_app --host localhost --port 8001
+    ```
+
+    Verify the discovery card:
+
+    ```bash
+    curl http://localhost:8001/.well-known/agent-card.json
+    ```
+
+    ### Environment variables
+
+    ```text .env.example
+    GEMINI_API_KEY="YOUR_API_KEY_HERE"
+    CHRIS_MODEL="gemini-pro"
+    CYRANO_MODEL="gemini-pro"
+    ```
+
+    ### Add to OpenBeavs
+
+    Register via the UI or API using `http://localhost:8001`.
+
+    <Note>
+      Cyrano is also pre-registered in the prototype backend (`back/main.py`) with `endpoint: "http://localhost:8001"`. If you are using the prototype backend, start the agent on port 8001 and it will be available immediately.
+    </Note>
+
+    ### Deploy to GCP
+
+    ```bash
+    cd agents
+    python deploy_agent.py Cyrano-de-Bergerac
+    ```
+  </Tab>
+
+  <Tab title="Claude">
+    ## Claude agent
+
+    **Directory:** `agents/claude-agent/`  
+    **Default port:** `8002`  
+    **Model:** `claude-sonnet-4-6` (default); supports `claude-opus-4-6`, `claude-haiku-4-5-20251001`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`
+
+    A thin A2A wrapper around the Anthropic Python SDK. It exposes any Claude model as an A2A-compatible agent. The model can be overridden per-request by passing `"model"` in the JSON-RPC `params`.
+
+    ### Discovery card
+
+    ```json
+    {
+      "name": "Claude",
+      "description": "Anthropic Claude — available models: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001, claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022",
+      "version": "1.0.0",
+      "url": "http://localhost:8002",
+      "capabilities": { "streaming": false },
+      "defaultInputModes": ["text"],
+      "defaultOutputModes": ["text"],
+      "skills": [
+        {
+          "id": "chat",
+          "name": "Chat",
+          "description": "Chat with Anthropic Claude models",
+          "tags": ["llm", "anthropic", "claude"]
+        }
+      ]
+    }
+    ```
+
+    ### Start the agent
+
+    ```bash
+    cd agents/claude-agent
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env   # add ANTHROPIC_API_KEY
+    uvicorn agent:app --host localhost --port 8002
+    ```
+
+    ### Environment variables
+
+    ```text .env.example
+    ANTHROPIC_API_KEY=your_api_key_here
+    AGENT_URL=http://localhost:8002
+    ```
+
+    ### Add to OpenBeavs
+
+    Register using `http://localhost:8002`. The prototype backend pre-registers this agent on startup.
+
+    ### Deploy to GCP
+
+    ```bash
+    cd agents
+    python deploy_agent.py claude-agent
+    ```
+  </Tab>
+
+  <Tab title="ChatGPT">
+    ## ChatGPT agent
+
+    **Directory:** `agents/chatgpt-agent/`  
+    **Default port:** `8003`  
+    **Model:** `gpt-4o` (default); supports `gpt-4o-mini`, `gpt-5.2`, `gpt-5.2-chat-latest`, `gpt-5.2-pro`
+
+    A thin A2A wrapper around the OpenAI Python SDK. Uses `CHATGPT_API_KEY` as the environment variable name (distinct from `OPENAI_API_KEY` used by the hub's OpenAI proxy).
+
+    ### Discovery card
+
+    ```json
+    {
+      "name": "ChatGPT",
+      "description": "OpenAI ChatGPT — available models: gpt-4o, gpt-4o-mini, gpt-5.2, gpt-5.2-chat-latest, gpt-5.2-pro",
+      "version": "1.0.0",
+      "url": "http://localhost:8003",
+      "capabilities": { "streaming": false },
+      "defaultInputModes": ["text"],
+      "defaultOutputModes": ["text"],
+      "skills": [
+        {
+          "id": "chat",
+          "name": "Chat",
+          "description": "Chat with OpenAI ChatGPT models",
+          "tags": ["llm", "openai", "chatgpt"]
+        }
+      ]
+    }
+    ```
+
+    ### Start the agent
+
+    ```bash
+    cd agents/chatgpt-agent
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env   # add CHATGPT_API_KEY
+    uvicorn agent:app --host localhost --port 8003
+    ```
+
+    ### Environment variables
+
+    ```text .env.example
+    CHATGPT_API_KEY=your_api_key_here
+    AGENT_URL=http://localhost:8003
+    ```
+
+    ### Add to OpenBeavs
+
+    Register using `http://localhost:8003`. The prototype backend pre-registers this agent on startup.
+
+    ### Deploy to GCP
+
+    ```bash
+    cd agents
+    python deploy_agent.py chatgpt-agent
+    ```
+  </Tab>
+
+  <Tab title="Gemini">
+    ## Gemini agent
+
+    **Directory:** `agents/gemini-agent/`  
+    **Default port:** `8004`  
+    **Model:** `gemini-2.0-flash` (default); supports `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-pro`, `gemini-1.5-flash`
+
+    Uses the OpenAI-compatible Gemini endpoint (`https://generativelanguage.googleapis.com/v1beta/openai/`) via the OpenAI Python SDK, so no separate Gemini SDK is required.
+
+    ### Discovery card
+
+    ```json
+    {
+      "name": "Gemini",
+      "description": "Google Gemini — available models: gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-pro, gemini-1.5-flash",
+      "version": "1.0.0",
+      "url": "http://localhost:8004",
+      "capabilities": { "streaming": false },
+      "defaultInputModes": ["text"],
+      "defaultOutputModes": ["text"],
+      "skills": [
+        {
+          "id": "chat",
+          "name": "Chat",
+          "description": "Chat with Google Gemini models",
+          "tags": ["llm", "google", "gemini"]
+        }
+      ]
+    }
+    ```
+
+    ### Start the agent
+
+    ```bash
+    cd agents/gemini-agent
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    cp .env.example .env   # add GEMINI_API_KEY
+    uvicorn agent:app --host localhost --port 8004
+    ```
+
+    ### Environment variables
+
+    ```text .env.example
+    GEMINI_API_KEY=your_api_key_here
+    AGENT_URL=http://localhost:8004
+    ```
+
+    ### Add to OpenBeavs
+
+    Register using `http://localhost:8004`. The prototype backend pre-registers this agent on startup.
+
+    ### Deploy to GCP
+
+    ```bash
+    cd agents
+    python deploy_agent.py gemini-agent
+    ```
+  </Tab>
+</Tabs>
+
+## Port summary
+
+| Agent | Default port | Notes |
+|---|---|---|
+| Cyrano de Bergerac | 8001 | Multi-agent pipeline |
+| Oregon State Expert | 8002 | Gemini + Google Search |
+| Claude | 8002 | Conflicts with OSU Expert — change one if running both |
+| ChatGPT | 8003 | |
+| Gemini | 8004 | Uses OpenAI-compatible API |
+
+<Warning>
+  The Oregon State Expert and Claude agent both default to port `8002`. If you run both locally, set the `PORT` environment variable on one of them to a different port and update its `AGENT_URL` accordingly before registering with the hub.
+</Warning>
+
+## Prototype backend pre-registration
+
+When you start the prototype backend (`back/main.py`) it automatically creates four agent records in memory:
+
+| Agent ID | Name | Default endpoint |
+|---|---|---|
+| `cyrano_agent` | Cyrano de Bergerac | `http://localhost:8001` |
+| `claude_agent` | Claude | `http://localhost:8002` |
+| `chatgpt_agent` | ChatGPT | `http://localhost:8003` |
+| `gemini_agent` | Gemini | `http://localhost:8004` |
+
+These records exist only for the lifetime of the prototype backend process (in-memory storage). The Oregon State Expert is not pre-registered — you must register it manually via `POST /agents/register-by-url`.

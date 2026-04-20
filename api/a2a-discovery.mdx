@@ -1,0 +1,144 @@
+---
+title: "GET /.well-known/agent.json — A2A discovery card"
+description: "The A2A discovery endpoint every compliant agent must expose. Full schema reference, the OpenBeavs hub's own card, and notes on path variants."
+---
+
+The A2A (Agent-to-Agent) protocol requires every agent — including the OpenBeavs hub itself — to serve a JSON discovery card at `GET /.well-known/agent.json`. This card tells other agents and clients what the agent is called, what it can do, what input and output modes it accepts, and which JSON-RPC methods to call. When you register an agent by URL in OpenBeavs, the hub fetches this endpoint to populate the agent record automatically.
+
+<Note>
+Some agents in the ecosystem use a variant path `/.well-known/agent-card.json` (for example, the Cyrano de Bergerac agent built with Google ADK). OpenBeavs normalises to `/.well-known/agent.json` by default, but the hub will also try `/.well-known/agent-card.json` as a fallback when verifying agent connections through the settings UI.
+</Note>
+
+---
+
+## GET /.well-known/agent.json
+
+This endpoint is public and requires no authentication. It is served by every A2A-compliant agent, as well as by the OpenBeavs hub at both `http://localhost:8000` and `http://localhost:8080`.
+
+```bash
+curl http://localhost:8080/.well-known/agent.json
+```
+
+**Response** — `200 OK`, the agent's discovery card:
+
+```json
+{
+  "name": "OpenBeavs",
+  "description": "OpenBeavs for agent coordination and management",
+  "url": "http://localhost:8080",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "skills": [
+    {
+      "id": "agent_management",
+      "name": "Agent Management",
+      "description": "Manages and coordinates AI agents",
+      "tags": ["agent", "coordination", "management"],
+      "examples": ["list agents", "register agent", "chat with agent"]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": true
+}
+```
+
+---
+
+## Discovery card schema
+
+<ResponseField name="name" type="string" required>
+  The agent's human-readable display name. Shown in the hub's agent listing and model selector.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  A short description of the agent's purpose.
+</ResponseField>
+
+<ResponseField name="url" type="string" required>
+  The agent's base URL. This is the canonical identifier used for deduplication when registering agents.
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  SemVer version string (e.g. `"1.0.0"`).
+</ResponseField>
+
+<ResponseField name="capabilities" type="object">
+  Declares optional protocol capabilities the agent supports.
+  <Expandable title="properties">
+    <ResponseField name="streaming" type="boolean">
+      `true` if the agent can stream partial responses back to the hub. The hub simulates streaming for non-streaming agents by chunking the full response word-by-word in the UI.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="defaultInputModes" type="array of strings">
+  MIME types or mode identifiers for inputs the agent accepts. Currently `["text"]` is the standard value.
+</ResponseField>
+
+<ResponseField name="defaultOutputModes" type="array of strings">
+  MIME types or mode identifiers for outputs the agent produces. Currently `["text"]` is the standard value.
+</ResponseField>
+
+<ResponseField name="skills" type="array of objects">
+  List of discrete capabilities or specialisations the agent exposes.
+  <Expandable title="skill object properties">
+    <ResponseField name="id" type="string">
+      Machine-readable identifier for the skill (e.g. `"agent_management"`).
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Human-readable skill name.
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      What this skill does.
+    </ResponseField>
+    <ResponseField name="tags" type="array of strings">
+      Keywords for search and filtering (e.g. `["agent", "coordination"]`).
+    </ResponseField>
+    <ResponseField name="examples" type="array of strings">
+      Example user queries that trigger this skill.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="supportsAuthenticatedExtendedCard" type="boolean">
+  When `true`, the agent can return an extended card with additional details to authenticated callers. This is an OpenBeavs-specific extension.
+</ResponseField>
+
+---
+
+## Path variants in the wild
+
+| Agent | Well-known path |
+|---|---|
+| OpenBeavs hub (`back/main.py`) | `/.well-known/agent.json` |
+| OpenBeavs hub (production) | `/.well-known/agent.json` |
+| Cyrano de Bergerac (ADK) | `/.well-known/agent-card.json` |
+| OSU Expert agent (ADK) | `/.well-known/agent-card.json` |
+| Standard A2A agents | `/.well-known/agent.json` |
+
+<Warning>
+When registering an agent via `POST /api/agents/register-by-url`, the production hub always appends `/.well-known/agent.json` to the base URL. If your agent serves its card at `/.well-known/agent-card.json` instead, registration via URL will fail. Use `POST /api/agents/register` to register it manually, or update your agent to also serve the card at the standard path.
+</Warning>
+
+---
+
+## Minimal valid discovery card
+
+A conformant agent needs at minimum:
+
+```json
+{
+  "name": "My Custom Agent",
+  "version": "1.0.0",
+  "description": "A custom A2A agent",
+  "capabilities": {"streaming": false},
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "skills": []
+}
+```
+
+The `url` field is optional in the card itself; the hub will fall back to the request's base URL if it is absent.

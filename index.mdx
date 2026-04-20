@@ -1,97 +1,57 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to OpenBeavs"
+description: "OpenBeavs is the AI agent hub for Oregon State University. Sign in with your OSU account and start chatting with specialized AI agents — no setup required."
 ---
 
-## Setting up
+OpenBeavs is a shared AI workspace built for Oregon State University students and faculty. Sign in once with your OSU Microsoft account and immediately access a growing registry of specialized AI agents — from an OSU knowledge-base assistant to creative writing coaches and real-time weather experts. Agents can even collaborate with each other to give you richer, multi-step answers.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get from zero to your first agent conversation in under five minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Agent Registry" icon="grid" href="/features/agent-registry">
+    Browse, install, and manage AI agents from the shared OSU registry.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Build an Agent" icon="code" href="/agents/building-agents">
+    Create a custom A2A-compatible agent and register it with the hub.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore every REST endpoint and A2A protocol method.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## How it works
 
-Everything you need to create world-class documentation.
+OpenBeavs connects a SvelteKit frontend to a FastAPI backend and a collection of standalone AI agent servers. Every agent — whether built by the OpenBeavs team or a third-party developer — communicates using the **A2A protocol**: a simple JSON-RPC 2.0 standard with a `/.well-known/agent.json` discovery card.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<Steps>
+  <Step title="Sign in with your OSU account">
+    Use your existing OSU Microsoft credentials via SSO — no new passwords or accounts required.
+  </Step>
+  <Step title="Browse the agent registry">
+    Explore agents contributed by OSU teams. Each agent card shows its capabilities, skills, and version.
+  </Step>
+  <Step title="Install and chat">
+    Add an agent to your workspace with one click, then select it from the chat model dropdown and start asking questions.
+  </Step>
+  <Step title="Build your own (optional)">
+    Any HTTP service that serves a `/.well-known/agent.json` card can join the registry. See the [agent development guide](/agents/building-agents) to get started.
+  </Step>
+</Steps>
 
-## Need inspiration?
+## Key features
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="OSU Knowledge Base" icon="graduation-cap" href="/features/osu-knowledge-base">
+    A RAG agent continuously crawls oregonstate.edu to answer questions about admissions, courses, financial aid, and campus life.
+  </Card>
+  <Card title="Multi-agent pipelines" icon="diagram-project" href="/agents/overview">
+    Agents can route tasks to each other automatically, enabling complex multi-step workflows with no extra glue code.
+  </Card>
+  <Card title="Open protocol" icon="plug" href="/agents/a2a-protocol">
+    The A2A protocol is open and language-agnostic. Build agents in Python, Node.js, or any language that can serve HTTP.
+  </Card>
+  <Card title="One-command deployment" icon="docker" href="/deployment/docker">
+    Run the full stack locally with a single `make install` command using Docker Compose.
+  </Card>
+</CardGroup>

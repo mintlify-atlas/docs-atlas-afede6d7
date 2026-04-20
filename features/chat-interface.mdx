@@ -1,0 +1,87 @@
+---
+title: "Chat with AI agents in OpenBeavs"
+description: "Start conversations with installed AI agents, switch models mid-thread, run multiple agents at once, and revisit past chats — all from one unified interface."
+---
+
+The OpenBeavs chat interface is where you interact with every agent you have installed. It works like any modern chat product — type a message, press Enter, and read the response — but with one important difference: the "model" you select can be any A2A-compatible agent, not just a hosted LLM. Agents respond word-by-word for a natural reading experience, and your full conversation history is saved so you can pick up where you left off.
+
+## Starting a new chat
+
+<Steps>
+  <Step title="Click New Chat">
+    Click the **New Chat** button (pencil icon) in the top-left corner of the sidebar. A blank conversation thread opens in the main panel.
+  </Step>
+  <Step title="Select an agent from the model dropdown">
+    At the top of the chat window, click the **model selector** dropdown. Every agent you have installed appears here alongside any standard LLM models. Installed agents are tagged with `agent` and `a2a` labels to distinguish them from cloud models.
+
+    <Tip>
+      Don't see your agent? Make sure it is installed via **Workspace › Agents**. See [Discover and install AI agents](/features/agent-registry) for instructions.
+    </Tip>
+  </Step>
+  <Step title="Type your message">
+    Click the message input at the bottom of the screen and type your question or prompt.
+  </Step>
+  <Step title="Send and read the response">
+    Press **Enter** (or click the send button). The agent processes your message and the response streams back word-by-word so you can start reading immediately.
+  </Step>
+</Steps>
+
+## Selecting an agent
+
+The model dropdown at the top of every chat thread is how you tell OpenBeavs which agent or model should handle your messages. You can change the selection at any point — new messages will be routed to the newly selected agent while the existing thread history is preserved.
+
+<Note>
+  Switching models mid-conversation does not re-process earlier messages. The new agent will only see messages sent after the switch unless you start a fresh thread.
+</Note>
+
+## Sending messages and receiving responses
+
+Type any question or instruction in the message box and press **Enter** to send. OpenBeavs forwards your message to the selected agent using the A2A protocol over JSON-RPC 2.0, then streams the response back to the UI. Responses appear word-by-word — this is a deliberate UX choice to make long answers easier to follow, even though the underlying agent may return the full response at once.
+
+## Running multiple agents simultaneously
+
+You can have several agents active at the same time by opening multiple chat threads. Each thread is independent and routes to whichever agent is selected in that thread. This is useful when you want to compare answers from two different agents, or when you need to run parallel tasks — for example, asking the OSU knowledge base about financial aid in one window while drafting an email with the Cyrano writing agent in another.
+
+<Info>
+  OpenBeavs also supports **multi-agent collaboration behind the scenes**: some agents are built as pipelines that internally pass tasks to other specialist agents and return a single combined answer. You do not need to do anything special to trigger this — it happens automatically based on how the agent is built.
+</Info>
+
+## Streaming simulation
+
+A2A agents do not natively stream tokens the way LLM APIs do. Instead, OpenBeavs receives the agent's complete response and then re-delivers it to your browser word-by-word to create a streaming appearance. This means:
+
+- Responses always feel smooth and progressive, regardless of how the agent processes them internally.
+- There is no partial-response truncation — you always receive the full answer.
+- The typing indicator disappears and the stream starts as soon as the agent responds.
+
+## Chat history
+
+Every conversation thread is saved automatically. To revisit a past chat:
+
+1. Look in the left sidebar under **Chats** — threads are listed in reverse chronological order.
+2. Click any thread to reopen it with its full message history.
+3. You can continue the conversation exactly where you left off.
+
+Chat history is stored per user account. Signing in on a different device will show the same history as long as you use the same OSU credentials.
+
+<Warning>
+  Deleting a chat thread is permanent. OpenBeavs does not offer a way to recover deleted conversations.
+</Warning>
+
+## Troubleshooting
+
+<Accordion title="My agent doesn't appear in the model dropdown">
+  Agents only appear in the dropdown after they have been installed. Go to **Workspace › Agents**, confirm the agent is listed there, and refresh the page. If the agent was just installed, a browser refresh is usually enough to make it appear.
+</Accordion>
+
+<Accordion title="The agent returns an error instead of a response">
+  This usually means the agent server is offline or unreachable. Check that the agent is still running at the URL it was registered with. You can test it by navigating to **Workspace › Agents** and verifying the agent's status.
+</Accordion>
+
+<Accordion title="Responses appear all at once instead of word-by-word">
+  Word-by-word streaming is simulated by OpenBeavs after the agent responds. If you see the full response appear instantaneously, it may be a browser rendering quirk — the content itself is correct. Try a hard refresh (Ctrl+Shift+R / Cmd+Shift+R) if this bothers you.
+</Accordion>
+
+<Accordion title="My chat history is missing after signing back in">
+  Chat threads are tied to your user account. Make sure you are signed in with the same OSU Microsoft account you used previously. If history is still missing, contact the OpenBeavs team via [GitHub Issues](https://github.com/OpenBeavs/OpenBeavs/issues).
+</Accordion>

@@ -1,80 +1,138 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Get started with OpenBeavs"
+description: "Access OpenBeavs with your OSU Microsoft account, browse the agent registry, install your first agent, and send your first message — no local setup required."
 ---
 
-## Get started in three steps
-
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+OpenBeavs is available as a live web application for the Oregon State University community. You only need a modern browser and your OSU Microsoft account to get started. This guide walks you through signing in, finding an agent, and having your first conversation — everything runs in the cloud, so there is nothing to install on your machine.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  The live deployment requires an OSU Microsoft account. If you want to run OpenBeavs without OSU authentication, see the [local setup guide](/local-setup) instead.
 </Note>
+
+## Access the live app
+
+<Steps>
+  <Step title="Open OpenBeavs in your browser">
+    Navigate to the OpenBeavs live deployment. The app is hosted on Google Cloud Run and is accessible from any modern browser — Chrome, Firefox, and Safari are all supported.
+  </Step>
+
+  <Step title="Sign in with your OSU account">
+    Click **Sign in with Microsoft** on the login screen. You will be redirected to the standard OSU Microsoft SSO flow. Enter your OSU email address (e.g. `yourname@oregonstate.edu`) and your OSU password. No new account is needed — your existing OSU credentials work directly.
+
+    <Info>
+      If your institution requires multi-factor authentication, complete the MFA prompt as usual before being redirected back to OpenBeavs.
+    </Info>
+  </Step>
+
+  <Step title="Land on the main chat interface">
+    After signing in you will arrive at the main chat interface. This is where all your conversations with agents happen. You can start a new chat at any time by clicking **New Chat** in the left sidebar.
+  </Step>
+</Steps>
+
+## Browse the agent registry
+
+<Steps>
+  <Step title="Open the agent registry">
+    Click the **Workspace** icon in the left navigation sidebar, then select **Agents**. This opens the agent registry — a grid of all agents that have been published to the OpenBeavs hub by OSU teams and developers.
+  </Step>
+
+  <Step title="Explore available agents">
+    Each card in the registry shows the agent's name, description, and the skills it exposes. Current agents include:
+
+    - **OSU Expert** — answers questions about OSU courses, departments, admissions, financial aid, and campus life using a live-crawled knowledge base.
+    - **Cyrano de Bergerac** — a writing coach that helps craft eloquent responses.
+    - **Weather Expert** — provides weather information.
+    - **Master Router** — an orchestrator that routes queries to the most appropriate specialist agent automatically.
+
+    <Tip>
+      Look at the tags on each agent card to find agents relevant to your needs. Tags like `rag`, `osu`, and `writing` help you filter quickly.
+    </Tip>
+  </Step>
+</Steps>
+
+## Install your first agent
+
+<Steps>
+  <Step title="Select an agent to install">
+    Click on any agent card in the registry to open its detail page. Review the agent's description and listed skills to confirm it is the right one for you.
+  </Step>
+
+  <Step title="Add the agent to your workspace">
+    Click the **Install** button on the agent detail page. The agent is now active in your workspace and will appear in the model selector dropdown when you start a new chat.
+  </Step>
+</Steps>
+
+## Send your first message
+
+<Steps>
+  <Step title="Start a new chat">
+    Click **New Chat** in the left sidebar to open a fresh conversation.
+  </Step>
+
+  <Step title="Select your installed agent">
+    At the top of the chat window, click the model dropdown. Your installed agent will appear in the list alongside any other models configured on the hub. Select it.
+
+    <Info>
+      Agents are tagged with `agent` and `a2a` labels in the model dropdown so they are easy to distinguish from standard LLM models.
+    </Info>
+  </Step>
+
+  <Step title="Type and send your message">
+    Type your question or request in the message box and press **Enter** or click the send button. The agent will process your message and respond. For the OSU Expert agent, try something like:
+
+    > "What are the requirements for the CS degree at OSU?"
+
+    or
+
+    > "When is the deadline to apply for financial aid this year?"
+  </Step>
+
+  <Step title="Continue the conversation">
+    You can continue chatting in the same thread. Agents maintain conversation context, so follow-up questions work naturally. If you want a fresh start, open a new chat at any time.
+  </Step>
+</Steps>
+
+## Connect an A2A agent (admin only)
+
+If you are an admin and want to connect an external A2A-compatible agent to the hub — for example, an agent you have deployed yourself — use the Admin Settings panel.
+
+<Steps>
+  <Step title="Open Admin Settings">
+    Click your profile icon in the top-right corner, select **Settings**, then navigate to **Admin Settings** > **Connections**.
+  </Step>
+
+  <Step title="Enable A2A agents">
+    Scroll down to the **A2A Agents** section. Toggle the switch to **ON** to enable A2A agent connections.
+  </Step>
+
+  <Step title="Add a new agent connection">
+    Click the **+** button to add a new connection. Enter the agent's URL, for example:
+
+    ```
+    localhost:8001
+    ```
+
+    Leave the name field blank to auto-detect the agent's name from its `/.well-known/agent.json` discovery card, or enter a custom display name.
+  </Step>
+
+  <Step title="Verify and save">
+    Click the **Verify Connection** button (the refresh icon). Wait for the green checkmark to confirm the hub can reach the agent and read its discovery card. Then click **Save** at the bottom of the page.
+
+    <Warning>
+      If you see a red X instead of a green checkmark, confirm the agent server is running and reachable. For localhost agents, try both `localhost:8001` and `http://localhost:8001`.
+    </Warning>
+
+    Once saved, the agent will appear in the model selector in any new chat.
+  </Step>
+</Steps>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Local setup" icon="laptop" href="/local-setup">
+    Run the full OpenBeavs stack on your own machine with Docker.
+  </Card>
+  <Card title="Build an agent" icon="code" href="/agents/building-agents">
+    Create a custom A2A-compatible agent and register it with the hub.
+  </Card>
+</CardGroup>

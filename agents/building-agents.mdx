@@ -1,0 +1,243 @@
+---
+title: "Build a custom A2A agent for OpenBeavs"
+description: "How to create, run, and register a custom A2A-compatible agent with OpenBeavs, from minimal FastAPI example to GCP Cloud Run deployment."
+---
+
+Any web service that exposes two endpoints — a discovery card at `GET /.well-known/agent.json` and a JSON-RPC handler at `POST /` — is a valid OpenBeavs agent. You can write it in any language or framework. This guide uses Python and FastAPI, which is also what the built-in agents use.
+
+## Minimum requirements
+
+An A2A-compatible agent must implement exactly two endpoints:
+
+1. `GET /.well-known/agent.json` — returns the agent's discovery card (name, version, capabilities, skills).
+2. `POST /` — accepts JSON-RPC 2.0 requests with `"method": "message/send"` and returns a response in the `artifacts[].parts[].text` format.
+
+That is all the hub requires. Everything else — authentication, streaming, multi-turn context, tool use — is optional.
+
+## Build the agent
+
+<Steps>
+  <Step title="Create the agent directory">
+    Add a subdirectory under `agents/` in the repository. The standard layout is:
+
+    ```
+    agents/my-agent/
+    ├── agent.py
+    ├── requirements.txt
+    ├── .env.example
+    └── README.md
+    ```
+  </Step>
+
+  <Step title="Implement agent.py">
+    The following is the canonical minimal FastAPI agent from `front/A2A_QUICKSTART.md`:
+
+    ```python agent.py
+    from fastapi import FastAPI
+    from pydantic import BaseModel
+
+    app = FastAPI()
+
+    @app.get("/.well-known/agent.json")
+    async def agent_discovery():
+        return {
+            "name": "My Agent",
+            "version": "1.0.0",
+            "description": "Custom agent",
+            "capabilities": ["text"]
+        }
+
+    class JSONRPCRequest(BaseModel):
+        jsonrpc: str
+        method: str
+        params: dict
+        id: int
+
+    @app.post("/")
+    async def handle_jsonrpc(request: JSONRPCRequest):
+        if request.method == "message/send":
+            user_message = request.params["message"]["parts"][0]["text"]
+
+            # Your agent logic here
+            response_text = f"Echo: {user_message}"
+
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "artifacts": [{
+                        "parts": [{"text": response_text}]
+                    }]
+                },
+                "id": request.id
+            }
+    ```
+
+    For a production agent you would replace the echo logic with a real model call, as the built-in agents do (see `agents/claude-agent/agent.py` for an Anthropic example).
+  </Step>
+
+  <Step title="Define the discovery card">
+    The discovery card should use the full schema from `AGENTS.md`. A richer example with skills:
+
+    ```json /.well-known/agent.json schema
+    {
+      "name": "My Agent",
+      "description": "What this agent does",
+      "url": "https://myagent.example.com",
+      "version": "1.0.0",
+      "capabilities": { "streaming": true },
+      "defaultInputModes": ["text"],
+      "defaultOutputModes": ["text"],
+      "skills": [
+        {
+          "id": "skill_id",
+          "name": "Skill Name",
+          "description": "What this skill does",
+          "tags": ["tag1", "tag2"],
+          "examples": ["example query 1"]
+        }
+      ]
+    }
+    ```
+  </Step>
+
+  <Step title="Define the JSON-RPC response format">
+    Responses must nest the reply text inside `result.artifacts[].parts[].text`:
+
+    ```json Expected response format
+    {
+      "jsonrpc": "2.0",
+      "result": {
+        "artifacts": [
+          {
+            "parts": [
+              {
+                "text": "Hello! This is my response."
+              }
+            ]
+          }
+        ]
+      },
+      "id": 1
+    }
+    ```
+  </Step>
+
+  <Step title="Add requirements.txt and .env.example">
+    ```text requirements.txt
+    fastapi
+    uvicorn
+    python-dotenv
+    ```
+
+    ```text .env.example
+    # Required environment variables
+    MY_API_KEY=your_api_key_here
+    AGENT_URL=http://localhost:8001
+    ```
+
+    Never commit the actual `.env` file. It is gitignored across the project.
+  </Step>
+</Steps>
+
+## Run the agent locally
+
+```bash
+cd agents/my-agent
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env             # fill in real values
+uvicorn agent:app --host localhost --port 8001
+```
+
+Verify the agent is serving its discovery card:
+
+```bash
+curl http://localhost:8001/.well-known/agent.json
+```
+
+Test a JSON-RPC message directly:
+
+```bash
+curl -X POST http://localhost:8001 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "messageId": "test-123",
+      "message": {
+        "messageId": "test-123",
+        "role": "user",
+        "parts": [{"text": "Hello!"}]
+      }
+    },
+    "id": 1
+  }'
+```
+
+## Register with the hub
+
+<Tabs>
+  <Tab title="Web UI">
+    1. Log in to OpenBeavs at `http://localhost:8080`.
+    2. Navigate to **Workspace > Agents**.
+    3. Click **+** to add a new agent.
+    4. Enter the agent's base URL, for example `http://localhost:8001`.
+    5. Click the verify button and wait for the green checkmark.
+    6. Click **Save**.
+
+    The hub fetches `/.well-known/agent.json` automatically, stores the agent record in the database, and makes it available in the model dropdown.
+  </Tab>
+  <Tab title="API">
+    Use `POST /api/agents/register-by-url`. The hub strips the path from the URL and fetches `/.well-known/agent.json` automatically:
+
+    ```bash
+    curl -X POST http://localhost:8080/api/agents/register-by-url \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"agent_url": "http://localhost:8001"}'
+    ```
+
+    You can also verify the A2A configuration endpoint:
+
+    ```bash
+    curl -X POST http://localhost:8080/api/v1/configs/a2a_agents/verify \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "url": "http://localhost:8001",
+        "name": "My Agent",
+        "config": {}
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  After registering, refresh the browser. Agents are tagged with `agent` and `a2a` labels in the model selector dropdown. If the agent does not appear, confirm that the A2A Agents toggle is enabled in **Admin Settings > Connections**.
+</Note>
+
+## Deploy to GCP Cloud Run
+
+The repository includes a universal deployment script for agents:
+
+```bash
+cd agents
+python deploy_agent.py <agent-name>
+```
+
+For example, to deploy the Oregon State Expert:
+
+```bash
+cd agents
+python deploy_agent.py oregon-state-expert
+```
+
+This script packages the agent directory, builds a Docker image via GCP Cloud Build, and deploys it to Cloud Run. See `agents/DEPLOYMENT_README.md` for full configuration details and required GCP permissions.
+
+After deployment, update the registered endpoint URL in the hub to point to the Cloud Run service URL.
+
+<Warning>
+  Secrets such as `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` must be stored in GCP Secret Manager for Cloud Run deployments, not passed as plaintext environment variables. Never commit `.env` files.
+</Warning>

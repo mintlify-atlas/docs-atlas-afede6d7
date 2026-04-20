@@ -1,0 +1,91 @@
+---
+title: "AI agents in OpenBeavs: architecture and concepts"
+description: "Learn what agents are in OpenBeavs, the difference between registry and installed agents, and how multi-agent pipelines work end to end."
+---
+
+OpenBeavs is built around a single idea: any HTTP service that exposes a `/.well-known/agent.json` discovery card is an agent, and any agent can talk to any other agent using the same standardized protocol. This means you can wire together local scripts, cloud services, and third-party AI models inside one chat interface without changing the hub's code.
+
+## What is an agent?
+
+An agent in OpenBeavs is any HTTP service that satisfies two conditions:
+
+1. It serves a JSON discovery card at `GET /.well-known/agent.json` that describes its name, capabilities, and skills.
+2. It accepts JSON-RPC 2.0 messages at a root-level `POST` endpoint using the `message/send` method.
+
+The hub itself satisfies these same conditions — `back/main.py` serves its own `/.well-known/agent.json` so that other hubs can treat OpenBeavs as an agent.
+
+## Two kinds of agents
+
+OpenBeavs distinguishes between two categories of agents, and it is important not to confuse them.
+
+<Tabs>
+  <Tab title="Standalone deployable agents">
+    These live in the `agents/` directory of the repository. Each subdirectory is an independently runnable service built with the **Google Agent Development Kit (ADK)**. You start them with `uvicorn`, they listen on their own port, and you can deploy them to GCP Cloud Run with `python agents/deploy_agent.py <agent-name>`.
+
+    Examples: `Cyrano-de-Bergerac`, `oregon-state-expert`, `claude-agent`, `chatgpt-agent`, `gemini-agent`.
+
+    These are *not* automatically available in the hub — you must register them (see below).
+  </Tab>
+  <Tab title="Locally installed agents">
+    These are database records stored in the production backend via `front/backend/open_webui/models/agents.py`. Once registered, they appear in the model dropdown in the chat interface.
+
+    The relevant API router is `/api/agents`. Key fields on the `AgentModel` are:
+    - `endpoint` — the A2A JSON-RPC POST URL the hub calls when forwarding messages
+    - `url` — the base homepage URL (used as a fallback when `endpoint` is absent)
+    - `capabilities`, `skills`, `is_active`
+  </Tab>
+</Tabs>
+
+## Registry vs installed agents
+
+OpenBeavs also has a *public registry* (separate from installed agents) managed at `/api/registry`. The distinction is:
+
+| Concept | API prefix | Purpose |
+|---|---|---|
+| **Installed agents** | `/api/agents` | Active agents on a specific hub instance, available in chat |
+| **Registry** | `/api/registry` | Public showcase — agents others can discover but that may not be installed |
+
+You can submit an agent to the registry and separately install it on your hub. These are independent operations.
+
+## Multi-agent pipelines
+
+Because every agent speaks the same JSON-RPC 2.0 protocol, agents can call other agents. The Cyrano de Bergerac agent is the canonical example: it is a `SequentialAgent` that internally routes each request through a *chris* sub-agent (tone analysis) and then a *cyrano* sub-agent (response generation) before returning a reply to the hub. From the hub's perspective it is still one agent at one URL.
+
+The hub's message relay logic (in `front/backend/open_webui/routers/agents.py` → `send_message_to_agent()`) constructs a standard `message/send` JSON-RPC call and forwards the user's text. The agent's internal complexity is invisible to the hub.
+
+## Agent lifecycle
+
+<Steps>
+  <Step title="Develop">
+    Create a directory under `agents/<agent-name>/` with `agent.py`, `requirements.txt`, `.env.example`, and `README.md`. Implement the two required endpoints: `GET /.well-known/agent.json` and `POST /`.
+  </Step>
+  <Step title="Run locally">
+    Start the agent with uvicorn on a free port, for example `uvicorn agent.agent:a2a_app --host localhost --port 8002`. Verify it is alive by fetching its discovery card.
+  </Step>
+  <Step title="Register with the hub">
+    Navigate to **Workspace > Agents > +** in the OpenBeavs UI and enter the agent's base URL, or call `POST /api/agents/register-by-url` with `{"agent_url": "http://localhost:8002"}`. The hub fetches `/.well-known/agent.json` automatically and stores the agent record.
+  </Step>
+  <Step title="Chat">
+    Select the agent from the model dropdown and start a conversation. The hub proxies every message to the agent's `endpoint` using the A2A JSON-RPC format.
+  </Step>
+  <Step title="Deploy">
+    When ready for production, deploy the agent to GCP Cloud Run: `python agents/deploy_agent.py <agent-name>`. Update the registered endpoint URL in the hub to point to the Cloud Run service URL.
+  </Step>
+</Steps>
+
+## Explore further
+
+<CardGroup cols={2}>
+  <Card title="A2A protocol" icon="bolt" href="/agents/a2a-protocol">
+    The full JSON-RPC 2.0 message format, discovery card schema, and response structure.
+  </Card>
+  <Card title="Building agents" icon="hammer" href="/agents/building-agents">
+    Step-by-step guide to creating and registering a custom A2A agent.
+  </Card>
+  <Card title="Built-in agents" icon="robot" href="/agents/built-in-agents">
+    Reference for Cyrano, Oregon State Expert, Claude, ChatGPT, and Gemini agents.
+  </Card>
+  <Card title="API reference" icon="code" href="/api/overview">
+    Full REST API documentation for agent registration and management.
+  </Card>
+</CardGroup>

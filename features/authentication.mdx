@@ -1,0 +1,90 @@
+---
+title: "Sign in to OpenBeavs with your OSU account"
+description: "Sign in to OpenBeavs with your OSU Microsoft account — no new account needed. Covers the SSO flow, getting your API key, and troubleshooting access."
+---
+
+OpenBeavs is designed for the OSU community, so signing in is as straightforward as it gets: use the same Microsoft account you already have through Oregon State. No new username, no new password, no waiting for an approval email. If you have an active OSU ONID account, you are ready to go.
+
+## Signing in with your OSU account
+
+<Steps>
+  <Step title="Go to OpenBeavs">
+    Open your browser and navigate to the OpenBeavs URL. On the live deployment, this is the Google Cloud Run URL shared by your team or instructor. Locally, it runs at `http://localhost:3000` or `http://localhost:8080` depending on how you started it.
+  </Step>
+  <Step title="Click 'Sign in with Microsoft'">
+    On the sign-in page, click the **Sign in with Microsoft** button. You will be redirected to the standard Microsoft / OSU login page.
+  </Step>
+  <Step title="Enter your OSU credentials">
+    Use your **OSU ONID email** (e.g., `smithjan@oregonstate.edu`) and your **OSU account password** — the same ones you use for Canvas, MyOSU, and Office 365. Complete any two-factor authentication (Duo) prompt if required.
+  </Step>
+  <Step title="You're in">
+    After successful authentication, Microsoft redirects you back to OpenBeavs and your session begins automatically. You will land on the main chat interface.
+  </Step>
+</Steps>
+
+<Note>
+  Your OSU credentials are never stored by OpenBeavs. Authentication is handled entirely by Microsoft's identity platform on Oregon State's behalf — OpenBeavs only receives a confirmation that you authenticated successfully.
+</Note>
+
+## What credentials to use
+
+| Account type | Use case | Credentials |
+|---|---|---|
+| **OSU Microsoft (ONID)** | Live deployment and standard use | Your `@oregonstate.edu` email + OSU password |
+| **Local account** | Development and testing only | Username + password you create on first run |
+
+<Warning>
+  Local accounts are only available on self-hosted instances running without Microsoft SSO configured. The live OpenBeavs deployment requires an OSU Microsoft account — local accounts are not accepted there.
+</Warning>
+
+## Getting your API key
+
+If you want to access OpenBeavs programmatically — for example, to run the A2A integration test script or call the API directly — you need your personal API key.
+
+<Steps>
+  <Step title="Sign in to OpenBeavs">
+    Sign in as described above.
+  </Step>
+  <Step title="Open Settings">
+    Click your **profile icon** in the top-right corner, then select **Settings** from the dropdown menu.
+  </Step>
+  <Step title="Go to the Account tab">
+    In the Settings panel, click the **Account** tab.
+  </Step>
+  <Step title="Copy your API key">
+    Your API key is displayed in the **API Key** section. Click the copy icon to copy it to your clipboard.
+  </Step>
+</Steps>
+
+<Warning>
+  Treat your API key like a password. Anyone with your key can make requests to OpenBeavs on your behalf. Do not share it, commit it to a repository, or paste it in a public chat.
+</Warning>
+
+Once you have your key, you can pass it as a Bearer token in API requests:
+
+```bash
+curl -X GET https://<your-openbeavs-url>/api/v1/agents \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## If you can't sign in
+
+<Accordion title="The Microsoft sign-in page shows an error">
+  Make sure you are entering your full OSU email address including `@oregonstate.edu`. If you recently changed your OSU password, wait a few minutes for the change to propagate across Microsoft's systems and then try again.
+</Accordion>
+
+<Accordion title="I'm redirected back to the OpenBeavs login page after signing in with Microsoft">
+  This can happen if your browser is blocking third-party cookies. Try opening OpenBeavs in a private/incognito window, or temporarily disable cookie blocking for the OpenBeavs domain in your browser settings.
+</Accordion>
+
+<Accordion title="I completed the Microsoft sign-in but see 'Access denied' or 'Unauthorized'">
+  Your OSU account may not have been granted access to this instance of OpenBeavs. Contact your course instructor or the OpenBeavs team via [GitHub Issues](https://github.com/OpenBeavs/OpenBeavs/issues) to request access.
+</Accordion>
+
+<Accordion title="Duo two-factor authentication is not working">
+  Two-factor authentication is managed entirely by Oregon State's IT services, not by OpenBeavs. If you are having Duo issues, contact the [OSU IT Help Desk](https://oregonstate.edu/helpdeskcentral) directly.
+</Accordion>
+
+<Accordion title="I'm running OpenBeavs locally and want to skip the sign-in screen">
+  When running the Docker-based local setup (`make install`), authentication requirements are relaxed by default so you can develop without needing an OSU account. Use the local account option on the sign-in page to create a username and password for your local session.
+</Accordion>

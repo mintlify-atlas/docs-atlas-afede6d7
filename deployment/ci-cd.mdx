@@ -1,0 +1,171 @@
+---
+title: "Automated CI/CD pipeline with Cloud Build"
+description: "Merging to main auto-triggers GCP Cloud Build: cache pull, unified Docker build, Artifact Registry push, and Cloud Run deploy to openbeavs-deploy-test."
+---
+
+OpenBeavs uses Google Cloud Build to automate the full build-and-deploy cycle. Every pull request merged to `main` triggers a four-stage pipeline defined in `cloudbuild.yaml` that compiles the SvelteKit frontend, bundles it with the FastAPI backend into a single Docker image, pushes it to Artifact Registry, and rolls it out to Cloud Run — with no manual steps required.
+
+## Requirements before merge
+
+Before a PR can be merged to `main` (and the pipeline triggered), two conditions must be satisfied:
+
+- All GitHub Actions status checks must pass: **Linters** and **Unit Tests**
+- At least **one approving review** from a team member (you cannot approve your own PR)
+
+<Warning>
+  Merging without passing status checks is blocked by branch protection rules. Fix any linting or test failures on your branch before requesting review.
+</Warning>
+
+## Pipeline stages
+
+<Steps>
+  <Step title="Pull cache">
+    Cloud Build pulls the most recent image from Artifact Registry to use as a Docker layer cache. This dramatically reduces build times by reusing unchanged layers from the previous deployment.
+
+    ```yaml
+    - name: 'gcr.io/cloud-builders/docker'
+      id: 'pull-cache'
+      args:
+        - 'pull'
+        - 'us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend:latest'
+      allowFailure: true
+    ```
+
+    `allowFailure: true` means the pipeline continues even if no cached image exists yet (for example, on the very first run).
+  </Step>
+
+  <Step title="Unified build">
+    Docker builds the image from the repository root using the root `Dockerfile`. This is a multi-stage build:
+
+    1. **Stage 1 (node:20-slim):** Installs Node dependencies and runs `npm run build:copy`, which compiles the SvelteKit frontend and copies the output into `front/backend/static/`.
+    2. **Stage 2 (python:3.11-slim):** Installs Python dependencies, copies the backend source and the built frontend static files, and configures Uvicorn as the entrypoint on port `8080`.
+
+    The result is a single image that serves both the frontend and backend.
+
+    ```yaml
+    - name: 'gcr.io/cloud-builders/docker'
+      id: 'build'
+      waitFor: ['pull-cache']
+      args:
+        - 'build'
+        - '--cache-from'
+        - 'us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend:latest'
+        - '-t'
+        - 'us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend:$COMMIT_SHA'
+        - '-t'
+        - 'us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend:latest'
+        - '.'
+    ```
+
+    The build machine is an `E2_HIGHCPU_8` instance for faster compilation.
+  </Step>
+
+  <Step title="Push to Artifact Registry">
+    Both tags are pushed to the `us-west1` Artifact Registry repository in a single command:
+
+    ```yaml
+    - name: 'gcr.io/cloud-builders/docker'
+      id: 'push'
+      waitFor: ['build']
+      args:
+        - 'push'
+        - '--all-tags'
+        - 'us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend'
+    ```
+
+    Each deployment produces two tags:
+    - `$COMMIT_SHA` — immutable reference to the exact commit that produced this image
+    - `latest` — always points to the most recent successful build
+  </Step>
+
+  <Step title="Deploy to Cloud Run">
+    The pipeline deploys the commit-SHA-tagged image to the `openbeavs-deploy-test` service in `us-west1`:
+
+    ```yaml
+    - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+      id: 'deploy'
+      waitFor: ['push']
+      entrypoint: gcloud
+      args:
+        - 'run'
+        - 'deploy'
+        - 'openbeavs-deploy-test'
+        - '--image=us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend:$COMMIT_SHA'
+        - '--region=us-west1'
+        - '--platform=managed'
+        - '--allow-unauthenticated'
+        - '--execution-environment=gen2'
+        - '--memory=8Gi'
+        - '--cpu=4'
+        - '--port=8080'
+        - '--timeout=600'
+    ```
+
+    Cloud Run creates a new revision and automatically shifts 100% of traffic to it once the revision becomes healthy.
+
+    <Info>
+      The deploy step injects production environment variables via `--set-env-vars`, including `HOST`, `WEBUI_SECRET_KEY`, `OFFLINE_MODE`, and flags that disable HuggingFace model auto-downloads to prevent startup timeouts.
+    </Info>
+  </Step>
+</Steps>
+
+## Pipeline summary
+
+| Stage | Cloud Builder | Key action |
+|---|---|---|
+| `pull-cache` | `gcr.io/cloud-builders/docker` | Pull `openbeavs-frontend:latest` for layer cache |
+| `build` | `gcr.io/cloud-builders/docker` | Multi-stage build → tags `$COMMIT_SHA` + `latest` |
+| `push` | `gcr.io/cloud-builders/docker` | Push both tags to Artifact Registry (us-west1) |
+| `deploy` | `gcr.io/google.com/cloudsdktool/cloud-sdk` | Roll out to `openbeavs-deploy-test` (us-west1) |
+
+## Viewing build logs
+
+1. Open the [GCP Console](https://console.cloud.google.com/) and navigate to **Cloud Build → History**.
+2. Click any build to see the step-by-step log output.
+3. For failures, the log will show exactly which stage failed and the error message.
+
+Alternatively, stream build logs from the CLI:
+
+```bash
+gcloud builds list --limit=5 --project=osu-genesis-hub
+gcloud builds log <BUILD_ID> --project=osu-genesis-hub
+```
+
+## Rolling back
+
+If a deployment introduces a regression, roll back without rebuilding:
+
+1. Open **Cloud Run → openbeavs-deploy-test → Revisions** in the GCP Console.
+2. Identify the last known-good revision (each revision is labeled with its deploy timestamp and image tag).
+3. Click **Manage Traffic** and route 100% of traffic to that revision.
+
+Because every image is tagged with its commit SHA, you can also re-deploy a specific past commit by referencing its SHA tag directly:
+
+```bash
+gcloud run deploy openbeavs-deploy-test \
+  --image=us-west1-docker.pkg.dev/osu-genesis-hub/cloud-run-source-deploy/openbeavs-frontend:<COMMIT_SHA> \
+  --region=us-west1 \
+  --platform=managed
+```
+
+<Tip>
+  Tag every production deployment in Git with a SemVer tag (`MAJOR.MINOR.PATCH`) so rollbacks can be mapped to a specific release version. See `CONTRIBUTING.md` for the full release process.
+</Tip>
+
+## Troubleshooting
+
+<Accordion title="Build fails at the npm build step">
+  Check the Cloud Build log for the `build` stage. Common causes:
+  - A TypeScript or ESLint error introduced in the PR (should have been caught by the CI linter check)
+  - The Node build running out of memory — the `E2_HIGHCPU_8` machine and the `--max-old-space-size=4096` flag in the Dockerfile mitigate this, but very large dependency changes can still trigger it
+
+  Fix the issue on your branch, push, and open a new PR.
+</Accordion>
+
+<Accordion title="Deploy step times out">
+  Cloud Run has a 600-second startup timeout configured in `cloudbuild.yaml`. If the container takes longer to start, it usually means a model download or heavy initialization is happening. Verify that `OFFLINE_MODE=true` and all `*_AUTO_UPDATE=false` flags are present in `--set-env-vars`.
+</Accordion>
+
+<Accordion title="New revision is not receiving traffic">
+  Cloud Run may have failed the health check on the new revision and rolled traffic back to the previous one automatically. Inspect the revision logs in **Cloud Run → openbeavs-deploy-test → Logs** and look for startup errors.
+</Accordion>

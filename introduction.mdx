@@ -1,0 +1,79 @@
+---
+title: "OpenBeavs: AI agent hub for Oregon State University"
+description: "OpenBeavs is a shared AI workspace for Oregon State University — sign in with your OSU account and access specialized AI agents built on the open A2A protocol."
+---
+
+OpenBeavs is an AI agent platform built specifically for Oregon State University. Instead of every team or department building its own AI integration from scratch, OpenBeavs provides a single, OSU-authenticated hub where specialized agents are discoverable, installable, and interoperable. Students and faculty sign in with their existing OSU Microsoft account and immediately gain access to a growing registry of agents — from an OSU knowledge-base assistant that can answer questions about admissions and financial aid, to a writing coach and weather agent — all communicating over an open standard that anyone can build on.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Access the live app, browse the agent registry, and send your first message in minutes.
+  </Card>
+  <Card title="Agent Registry" icon="grid-2" href="/features/agent-registry">
+    Explore the full list of available OSU agents and learn how to install them.
+  </Card>
+  <Card title="Build an Agent" icon="code" href="/agents/building-agents">
+    Any HTTP service with a `/.well-known/agent.json` card can join the hub. Build yours now.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore the REST and JSON-RPC 2.0 endpoints that power the hub and agent communication.
+  </Card>
+</CardGroup>
+
+## What problem does OpenBeavs solve?
+
+Oregon State University students and faculty rely on dozens of different AI tools — and none of them know anything about OSU. OpenBeavs fixes that. It's a shared workspace where OSU-specific context lives in one place, agents built by different teams are all reachable through the same interface, and collaboration between agents happens automatically behind the scenes. A single question can route through multiple specialists and come back as one coherent answer — no extra accounts, no friction.
+
+## Key features
+
+### For students and faculty
+
+- **Sign in with your OSU account** — Microsoft SSO means no new passwords; your existing OSU credentials work out of the box.
+- **Browse and install AI agents from a shared registry** — find agents built by other OSU teams, install them into your workspace, and start chatting immediately.
+- **Ask the OSU knowledge base anything** — a continuously-updated RAG agent crawls `*.oregonstate.edu` to answer real questions about admissions, financial aid, courses, and more.
+- **Agents that collaborate** — specialized agents pass tasks to each other automatically using the A2A protocol; you ask one question and the hub handles the rest.
+
+### For developers
+
+- **Build your own agent in minutes** — any HTTP service that exposes a `/.well-known/agent.json` discovery card can register with the hub. Language and framework are your choice.
+- **Open protocol (A2A)** — agents communicate over JSON-RPC 2.0. The spec is public and example agents are in the repository under `agents/`.
+
+## Architecture overview
+
+OpenBeavs is composed of a SvelteKit frontend, a production FastAPI backend, and a collection of standalone agents — all wired together through the A2A protocol.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      OpenBeavs Hub                       │
+│  SvelteKit UI  →  FastAPI Backend  →  Agent Registry     │
+│           ↕ A2A (JSON-RPC 2.0 over HTTP)                 │
+│   OSU Expert · Cyrano · Weather · Your Agent Here...     │
+└──────────────────────┬──────────────────────────────────┘
+                       │ vector queries
+┌──────────────────────▼──────────────────────────────────┐
+│                   OSU RAG Pipeline                       │
+│  BFS Crawler → Embeddings → Firestore Vector Store       │
+│  (crawls *.oregonstate.edu on a cron schedule)           │
+└─────────────────────────────────────────────────────────┘
+```
+
+The hub routes user messages to registered agents using the **A2A protocol** — an open JSON-RPC 2.0 standard with `/.well-known/agent.json` discovery cards. Agents can call other agents, enabling multi-step pipelines with no extra glue code.
+
+<Note>
+  The production backend lives in `front/backend/open_webui/` and runs on port 8080. There is also a lightweight prototype backend in `back/` on port 8000 — new feature work should always target the production backend.
+</Note>
+
+## Tech stack at a glance
+
+| Layer | Technology |
+|---|---|
+| Frontend | SvelteKit 2 + TypeScript |
+| Production backend | FastAPI + Peewee ORM (SQLite) + Uvicorn |
+| Agent framework | Google Agent Development Kit (ADK) |
+| Inter-agent protocol | A2A — JSON-RPC 2.0 over HTTP |
+| Auth | Azure MSAL (Microsoft SSO) |
+| Cloud | Google Cloud Run (us-west1) |
+
+## OSU RAG Pipeline
+
+The OSU knowledge-base agent is powered by a separate, continuously-running RAG pipeline that crawls `*.oregonstate.edu` using a BFS crawler, generates embeddings, and stores them in a Firestore vector store. The hub queries this pipeline via vector search to give grounded, up-to-date answers about OSU. Source: [github.com/OpenBeavs/OSU-RAG-Pipeline](https://github.com/OpenBeavs/OSU-RAG-Pipeline).

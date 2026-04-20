@@ -1,0 +1,217 @@
+---
+title: "Run OpenBeavs locally with Docker"
+description: "Set up the complete OpenBeavs stack on your machine using Docker Compose, or run the frontend and backend services individually for active development."
+---
+
+Running OpenBeavs locally gives you a fully functional instance with no OSU authentication required — useful for development, testing agents, or exploring the codebase. The quickest path is Docker Compose, which brings up the entire stack in one command. If you prefer more control, you can also start the frontend, production backend, and prototype backend as separate processes.
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed:
+
+| Tool | Version | Notes |
+|---|---|---|
+| [Docker](https://www.docker.com/) | Latest | Required for the full-stack Docker setup |
+| Node.js | 20+ | Required for running the frontend separately |
+| Python | 3.11+ | Required for running either backend separately |
+| Git | Any recent | For cloning the repository |
+
+<Note>
+  The Docker Compose setup is the recommended approach for most users. Per-service setup is only necessary if you are actively developing one part of the stack and want hot-reload on a specific service.
+</Note>
+
+## Option 1: Install and run with Make (recommended)
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/OpenBeavs/OpenBeavs.git
+    cd OpenBeavs
+    ```
+  </Step>
+
+  <Step title="Start the full stack">
+    ```bash
+    make install
+    ```
+
+    This installs frontend dependencies (`npm install` in `front/`) and backend hub dependencies (`pip install -r requirements.txt` in `back/`). Once complete, start each service in a separate terminal:
+
+    ```bash
+    # Terminal 1 — SvelteKit frontend
+    make dev-front    # http://localhost:5173
+
+    # Terminal 2 — backend hub
+    make dev-hub      # http://localhost:8000
+    ```
+  </Step>
+
+  <Step title="Open the app">
+    Navigate to `http://localhost:5173` in your browser. In the local development setup, authentication defaults to local accounts — no OSU SSO required.
+  </Step>
+</Steps>
+
+## Option 2: Per-service setup
+
+Use this approach when you want hot-reload on individual services — for example, when iterating on the SvelteKit frontend or the Python backend.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/OpenBeavs/OpenBeavs.git
+    cd OpenBeavs
+    ```
+  </Step>
+
+  <Step title="Start the production backend">
+    The production backend lives in `front/backend/` and uses Peewee ORM with SQLite. It runs on port 8080.
+
+    <CodeGroup>
+      ```bash Uvicorn (recommended)
+      cd front/
+      pip install -r backend/requirements.txt
+
+      PORT=8080 uvicorn open_webui.main:app \
+        --port 8080 \
+        --host 0.0.0.0 \
+        --forwarded-allow-ips "*" \
+        --reload
+      ```
+
+      ```bash Dev script shortcut
+      cd front/
+      pip install -r backend/requirements.txt
+      bash backend/dev.sh
+      ```
+    </CodeGroup>
+
+    The production backend will be available at `http://localhost:8080`. FastAPI auto-generates Swagger docs at `http://localhost:8080/docs`.
+  </Step>
+
+  <Step title="Start the frontend">
+    In a separate terminal, start the SvelteKit development server:
+
+    ```bash
+    cd front/
+    npm install
+    npm run dev
+    ```
+
+    The frontend runs at `http://localhost:5173` and proxies API requests to the backend at port 8080.
+
+    <Tip>
+      On first run, you may also need to fetch the WASM Python runtime used by some frontend features: `npm run pyodide:fetch`. This is a one-time download.
+    </Tip>
+  </Step>
+
+  <Step title="(Optional) Start the prototype backend">
+    The lightweight prototype backend in `back/` is an in-memory FastAPI service mainly used for quick testing. It runs on port 8000 and does not persist data.
+
+    ```bash
+    cd back/
+    pip install -r requirements.txt
+    uvicorn main:app --reload
+    ```
+
+    Available at `http://localhost:8000`.
+
+    <Warning>
+      The `back/` prototype is not the production code path. Do not use it for feature development — all new work belongs in `front/backend/open_webui/`.
+    </Warning>
+  </Step>
+</Steps>
+
+## Environment variables
+
+Copy the relevant `.env.example` files and fill in the required values before starting services.
+
+Key variables for the production backend (`front/backend/open_webui/config.py`):
+
+| Variable | Purpose | Required |
+|---|---|---|
+| `DATABASE_URL` | SQLite or PostgreSQL connection string | Yes |
+| `SECRET_KEY` | JWT signing key | Yes |
+| `PORT` | Backend server port (default: `8080`) | No |
+| `GEMINI_API_KEY` | Gemini model access for standalone agents | For agents |
+| `CHRIS_MODEL` | Gemini model ID for the Cyrano Chris sub-agent | For Cyrano |
+| `CYRANO_MODEL` | Gemini model ID for the Cyrano agent | For Cyrano |
+| `OPENAI_API_KEY` | Optional OpenAI proxy support | No |
+| `OLLAMA_BASE_URL` | Optional Ollama proxy support | No |
+
+<Warning>
+  Never commit `.env` files — they are gitignored. Use `.env.example` as a template and keep your actual credentials out of version control. In production, secrets are managed via GCP Secret Manager.
+</Warning>
+
+## Service ports at a glance
+
+| Service | Port | Command |
+|---|---|---|
+| Frontend (dev) | `5173` | `make dev-front` |
+| Backend hub (prototype) | `8000` | `make dev-hub` |
+| Production backend | `8080` | `PORT=8080 uvicorn open_webui.main:app ...` |
+| Example A2A agent | `8001` | `uvicorn orchestrator.agent:a2a_app --host localhost --port 8001` |
+
+## Running standalone agents locally
+
+Each agent in the `agents/` directory is independently deployable. For example, to run the Cyrano de Bergerac agent:
+
+```bash
+cd agents/Cyrano-de-Bergerac/
+source .venv/bin/activate
+uvicorn orchestrator.agent:a2a_app --host localhost --port 8001
+```
+
+Verify it is running:
+
+```bash
+curl http://localhost:8001/.well-known/agent.json
+```
+
+Once the agent is up, connect it to your local OpenBeavs instance via **Admin Settings > Connections** — see the [quickstart guide](/quickstart#connect-an-a2a-agent-admin-only) for the step-by-step instructions.
+
+## Linting and formatting
+
+Before committing, run the linters:
+
+<CodeGroup>
+  ```bash Frontend (from front/)
+  npm run lint           # ESLint + type check + backend lint
+  npm run lint:frontend  # ESLint only
+  npm run format         # Prettier
+  ```
+
+  ```bash Backend (Python)
+  ruff check .    # lint
+  ruff format     # format
+  ```
+</CodeGroup>
+
+## Running tests
+
+<CodeGroup>
+  ```bash Prototype backend tests
+  cd back/
+  pytest tests/ -v
+  ```
+
+  ```bash Production backend tests
+  cd front/
+  pytest backend/open_webui/test/ -v
+  ```
+
+  ```bash Frontend unit tests
+  cd front/
+  npm run test:frontend
+  ```
+</CodeGroup>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Build an agent" icon="code" href="/agents/building-agents">
+    Create a custom A2A-compatible agent and register it with your local hub.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore the full REST and JSON-RPC 2.0 API surface.
+  </Card>
+</CardGroup>

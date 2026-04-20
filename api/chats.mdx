@@ -1,0 +1,282 @@
+---
+title: "Chats API: create and manage conversation threads"
+description: "Create chat threads tied to specific agents, send messages, retrieve history, and delete threads — full reference for the OpenBeavs Chats API."
+---
+
+The Chats API provides conversation threading for agent interactions. Each chat is associated with exactly one agent and maintains a persistent message history. When you post a message to a chat, the hub forwards it to the chat's agent via the A2A JSON-RPC protocol, appends the agent's response, and returns it to the caller. The prototype backend stores chats in-memory; the production backend persists them in SQLite.
+
+<Note>
+The prototype backend exposes chats at `/chats` (port 8000). The production backend exposes them at `/api/chats` (port 8080) and requires a Bearer token.
+</Note>
+
+---
+
+## Data models
+
+### Chat
+
+<ResponseField name="id" type="string">
+  UUID string identifying the chat thread.
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Human-readable title of the conversation.
+</ResponseField>
+
+<ResponseField name="created_at" type="string (ISO 8601 datetime)">
+  Timestamp when the chat was created.
+</ResponseField>
+
+<ResponseField name="updated_at" type="string (ISO 8601 datetime)">
+  Timestamp of the most recent message or update.
+</ResponseField>
+
+<ResponseField name="agent_id" type="string">
+  UUID of the agent associated with this chat thread.
+</ResponseField>
+
+### Message
+
+<ResponseField name="id" type="string">
+  UUID string identifying this message.
+</ResponseField>
+
+<ResponseField name="chat_id" type="string">
+  UUID of the chat thread this message belongs to.
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  Either `"user"` (message sent by the caller) or `"assistant"` (response from the agent).
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The text body of the message.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string (ISO 8601 datetime)">
+  When this message was created.
+</ResponseField>
+
+<ResponseField name="files" type="array of objects | null">
+  Optional list of file attachments. Each object is a free-form dict describing the attached file.
+</ResponseField>
+
+---
+
+## GET /api/chats
+
+Returns all chat threads for the authenticated user.
+
+```bash
+curl http://localhost:8080/api/chats \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`, array of Chat objects:
+
+```json
+[
+  {
+    "id": "c1d2e3...",
+    "title": "Ask Cyrano a question",
+    "created_at": "2026-04-20T10:00:00",
+    "updated_at": "2026-04-20T10:05:00",
+    "agent_id": "cyrano_agent"
+  }
+]
+```
+
+---
+
+## POST /api/chats
+
+Creates a new chat thread and associates it with the specified agent. The agent must already be registered in the hub.
+
+**Request body** (`CreateChatRequest`):
+
+<ParamField body="title" type="string" required>
+  A descriptive title for the chat thread.
+</ParamField>
+
+<ParamField body="agent_id" type="string" required>
+  The UUID (or built-in ID) of the agent to associate with this chat. Returns `404` if the agent is not found.
+</ParamField>
+
+<CodeGroup>
+```bash Production
+curl -X POST http://localhost:8080/api/chats \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Ask Cyrano a question",
+    "agent_id": "cyrano_agent"
+  }'
+```
+
+```bash Prototype
+curl -X POST http://localhost:8000/chats \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Ask Cyrano a question",
+    "agent_id": "cyrano_agent"
+  }'
+```
+</CodeGroup>
+
+**Response** — `200 OK`, the created Chat object:
+
+```json
+{
+  "id": "c1d2e3...",
+  "title": "Ask Cyrano a question",
+  "created_at": "2026-04-20T10:00:00",
+  "updated_at": "2026-04-20T10:00:00",
+  "agent_id": "cyrano_agent"
+}
+```
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `404` | `"Agent not found"` | The `agent_id` does not match any registered agent. |
+
+---
+
+## GET /api/chats/{chat_id}
+
+Retrieves a single chat thread by its UUID.
+
+<ParamField path="chat_id" type="string" required>
+  UUID of the chat thread to retrieve.
+</ParamField>
+
+```bash
+curl http://localhost:8080/api/chats/c1d2e3... \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+Returns `404 Not Found` if the chat does not exist.
+
+---
+
+## DELETE /api/chats/{chat_id}
+
+Deletes a chat thread and all of its messages.
+
+<ParamField path="chat_id" type="string" required>
+  UUID of the chat thread to delete.
+</ParamField>
+
+```bash
+curl -X DELETE http://localhost:8080/api/chats/c1d2e3... \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`:
+
+```json
+{"message": "Chat deleted successfully"}
+```
+
+---
+
+## GET /api/chats/{chat_id}/messages
+
+Returns all messages in a chat thread, in chronological order.
+
+<ParamField path="chat_id" type="string" required>
+  UUID of the chat thread.
+</ParamField>
+
+```bash
+curl http://localhost:8080/api/chats/c1d2e3.../messages \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+**Response** — `200 OK`, array of Message objects:
+
+```json
+[
+  {
+    "id": "m1a2b3...",
+    "chat_id": "c1d2e3...",
+    "role": "user",
+    "content": "Write me a poem about autumn.",
+    "timestamp": "2026-04-20T10:01:00",
+    "files": null
+  },
+  {
+    "id": "m4c5d6...",
+    "chat_id": "c1d2e3...",
+    "role": "assistant",
+    "content": "Ah, autumn! The season of amber and gold...",
+    "timestamp": "2026-04-20T10:01:02",
+    "files": null
+  }
+]
+```
+
+---
+
+## POST /api/chats/{chat_id}/messages
+
+Sends a message to the chat's agent and returns the agent's reply. The hub:
+1. Appends your message to the thread as `role: "user"`.
+2. Looks up the agent associated with the chat.
+3. Forwards the message to the agent via JSON-RPC 2.0 (`message/send`).
+4. Appends the agent's reply as `role: "assistant"`.
+5. Returns the assistant message.
+
+<ParamField path="chat_id" type="string" required>
+  UUID of the chat thread to send to.
+</ParamField>
+
+**Request body** (`SendMessageBody`):
+
+<ParamField body="content" type="string" required>
+  The text of the message to send to the agent.
+</ParamField>
+
+<ParamField body="files" type="array of objects">
+  Optional list of file attachment objects to include with the message.
+</ParamField>
+
+<CodeGroup>
+```bash Production
+curl -X POST http://localhost:8080/api/chats/c1d2e3.../messages \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Write me a poem about autumn."
+  }'
+```
+
+```bash Prototype
+curl -X POST http://localhost:8000/chats/c1d2e3.../messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Write me a poem about autumn."
+  }'
+```
+</CodeGroup>
+
+**Response** — `200 OK`, the assistant Message object:
+
+```json
+{
+  "id": "m4c5d6...",
+  "chat_id": "c1d2e3...",
+  "role": "assistant",
+  "content": "Ah, autumn! The season of amber and gold...",
+  "timestamp": "2026-04-20T10:01:02",
+  "files": null
+}
+```
+
+**Error responses:**
+
+| Status | Detail | Cause |
+|---|---|---|
+| `404` | `"Chat not found"` | The `chat_id` does not match any existing chat. |
+| `404` | `"Agent not found"` | The agent linked to this chat no longer exists. |

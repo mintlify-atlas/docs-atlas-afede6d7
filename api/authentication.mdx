@@ -1,0 +1,139 @@
+---
+title: "Authentication API: sign in and get API tokens"
+description: "How to obtain an OpenBeavs API key from the UI, authenticate every request with a Bearer token, and troubleshoot 401 Unauthorized errors."
+---
+
+Every request to the OpenBeavs production backend (`localhost:8080`) must carry a valid API key in the `Authorization` header. The simplest way to get a key is from the web UI — no programmatic sign-in required. If you need to automate token retrieval (for example, in CI pipelines), the `POST /api/auths/signin` endpoint lets you exchange a username and password for a session token.
+
+<Note>
+The prototype backend (`localhost:8000`) does **not** enforce authentication. Do not expose it to untrusted networks.
+</Note>
+
+---
+
+## Getting your API key from the UI
+
+This is the recommended approach for personal use and scripting.
+
+1. Open OpenBeavs at `http://localhost:8080` (or your Cloud Run URL).
+2. Log in with your credentials.
+3. Click your profile icon in the top-right corner.
+4. Go to **Settings → Account**.
+5. Copy the value shown under **API Key**.
+
+The key is a long random string. Treat it like a password — do not commit it to source control.
+
+---
+
+## Using the API key
+
+Include the key as a Bearer token in the `Authorization` header on every request:
+
+```bash
+curl http://localhost:8080/api/agents \
+  -H "Authorization: Bearer sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+All HTTP methods (GET, POST, PUT, PATCH, DELETE) require this header on production endpoints.
+
+<Tip>
+Store the key in an environment variable and reference it in scripts:
+
+```bash
+export OPENBEAVS_API_KEY="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+curl http://localhost:8080/api/agents \
+  -H "Authorization: Bearer $OPENBEAVS_API_KEY"
+```
+</Tip>
+
+---
+
+## POST /api/auths/signin
+
+Programmatic sign-in. Exchange a username (email) and password for a session token that can be used as a Bearer token.
+
+**Request body** (`SigninForm`):
+
+<ParamField body="email" type="string" required>
+  The user's email address.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's password.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:8080/api/auths/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "you@example.com",
+    "password": "your-password"
+  }'
+```
+
+**Response** — `200 OK` (`SigninResponse`):
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "id": "a1b2c3...",
+  "email": "you@example.com",
+  "name": "Your Name",
+  "role": "user",
+  "profile_image_url": "/user.png"
+}
+```
+
+<ResponseField name="token" type="string">
+  A JWT session token. Pass this as `Bearer <token>` in the `Authorization` header.
+</ResponseField>
+
+<ResponseField name="token_type" type="string">
+  Always `"Bearer"`.
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  The authenticated user's UUID.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The authenticated user's email address.
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  The user's role: `"user"` or `"admin"`.
+</ResponseField>
+
+Use the returned `token` exactly as you would use the API key:
+
+```bash
+TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+curl http://localhost:8080/api/agents \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+<Warning>
+Session tokens expire based on the `JWT_EXPIRES_IN` server configuration. The static API key from **Settings → Account** does not expire and is preferred for long-lived automation.
+</Warning>
+
+---
+
+## 401 Unauthorized errors
+
+A `401` response means one of the following:
+
+| Cause | Fix |
+|---|---|
+| The `Authorization` header is missing entirely. | Add `-H "Authorization: Bearer <key>"` to your request. |
+| The API key was regenerated or revoked. | Go to **Settings → Account** and copy the new key. |
+| The session JWT has expired. | Call `POST /api/auths/signin` again to get a fresh token, or use the static API key instead. |
+| You are trying to perform an owner-or-admin-only action (e.g. deleting another user's registry entry). | Only the resource owner or an admin can mutate that resource. |
+
+All `401` responses include a JSON body:
+
+```json
+{"detail": "Unauthorized"}
+```

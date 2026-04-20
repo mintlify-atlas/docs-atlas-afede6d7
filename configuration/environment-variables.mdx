@@ -1,0 +1,128 @@
+---
+title: "Environment variables reference for OpenBeavs"
+description: "Complete reference for all environment variables that configure the OpenBeavs hub backend, standalone agents, and optional integrations."
+---
+
+OpenBeavs and its standalone agents are configured entirely through environment variables. For local development, copy the relevant `.env.example` file to `.env` and fill in your values. In production deployments on GCP Cloud Run, store secrets in **GCP Secret Manager** rather than `.env` files.
+
+<Warning>
+  Never commit `.env` files to the repository. They are gitignored by default. Use `.env.example` files as templates — they document required variables without containing real credentials.
+</Warning>
+
+## Hub variables
+
+These variables configure the production backend at `front/backend/open_webui/`. The full list is defined in `front/backend/open_webui/config.py` and `env.py`.
+
+<ParamField path="DATABASE_URL" type="string" required>
+  Connection string for the database. Use a SQLite path for local development (e.g. `sqlite:///./openbeavs.db`) or a PostgreSQL URL for production.
+</ParamField>
+
+<ParamField path="SECRET_KEY" type="string" required>
+  Secret used to sign JWT tokens for user authentication. Use a long, random string. Changing this value invalidates all existing sessions.
+</ParamField>
+
+<ParamField path="PORT" type="number" default="8080">
+  Port the backend server listens on. The default when running locally with `uvicorn` is `8080`.
+
+  ```bash
+  PORT=8080 uvicorn open_webui.main:app --port 8080 --host 0.0.0.0 --reload
+  ```
+</ParamField>
+
+<ParamField path="GEMINI_API_KEY" type="string">
+  API key for Google Gemini. Required by the standalone ADK agents and also used by the hub when Gemini-backed features are enabled. Obtain a key from [aistudio.google.com](https://aistudio.google.com).
+</ParamField>
+
+<ParamField path="OPENAI_API_KEY" type="string">
+  Optional. Enables the OpenAI-compatible proxy at `/api/openai`. Leave blank to disable OpenAI proxy support.
+</ParamField>
+
+<ParamField path="OLLAMA_BASE_URL" type="string" default="http://localhost:11434">
+  Optional. Base URL for a local [Ollama](https://ollama.com) instance. Used by the `/api/ollama` proxy router. Leave blank or omit to disable Ollama support.
+</ParamField>
+
+### Microsoft SSO (optional)
+
+These variables enable Microsoft Azure AD single sign-on for the hub. All four must be set together to activate SSO.
+
+<ParamField path="MICROSOFT_CLIENT_ID" type="string">
+  Azure AD application (client) ID.
+</ParamField>
+
+<ParamField path="MICROSOFT_CLIENT_SECRET" type="string">
+  Azure AD client secret value.
+</ParamField>
+
+<ParamField path="MICROSOFT_CLIENT_TENANT_ID" type="string">
+  Azure AD tenant ID for your organisation.
+</ParamField>
+
+<ParamField path="MICROSOFT_REDIRECT_URI" type="string">
+  OAuth 2.0 redirect URI registered in Azure AD (e.g. `http://localhost:8080/oauth/microsoft/callback`).
+</ParamField>
+
+---
+
+## Agent variables
+
+Each standalone agent in the `agents/` directory has its own `.env` file and `.env.example` template. Variables here are scoped to the individual agent process.
+
+### Cyrano de Bergerac (`agents/Cyrano-de-Bergerac/`)
+
+The Cyrano agent is a two-step pipeline: **Chris** performs tone analysis and **Cyrano** crafts the response. Each sub-agent uses its own Gemini model ID.
+
+<ParamField path="GEMINI_API_KEY" type="string" required>
+  API key for Google Gemini. Shared by both sub-agents in this pipeline.
+</ParamField>
+
+<ParamField path="CHRIS_MODEL" type="string" required>
+  Gemini model ID for the Chris (tone analysis) sub-agent. Example: `gemini-2.5-flash`.
+</ParamField>
+
+<ParamField path="CYRANO_MODEL" type="string" required>
+  Gemini model ID for the Cyrano (response generation) sub-agent. Example: `gemini-2.5-flash`.
+</ParamField>
+
+**Example `agents/Cyrano-de-Bergerac/.env`:**
+
+```bash agents/Cyrano-de-Bergerac/.env
+GEMINI_API_KEY="your_api_key_here"
+CHRIS_MODEL="gemini-2.5-flash"
+CYRANO_MODEL="gemini-2.5-flash"
+```
+
+### Oregon State Expert (`agents/oregon-state-expert/`)
+
+<ParamField path="GEMINI_API_KEY" type="string" required>
+  API key for Google Gemini.
+</ParamField>
+
+<ParamField path="OREGON_STATE_MODEL" type="string" required>
+  Gemini model ID used by this agent. Example: `gemini-1.5-pro-latest`.
+</ParamField>
+
+<ParamField path="GOOGLE_ENTRYPOINT" type="string">
+  Gunicorn entrypoint used when deploying to Google Cloud Run. Typically set to:
+
+  ```bash
+  gunicorn --bind :$PORT oregon-state-expert.agent.agent:app
+  ```
+</ParamField>
+
+**Example `agents/oregon-state-expert/.env`:**
+
+```bash agents/oregon-state-expert/.env
+GEMINI_API_KEY="your_api_key_here"
+OREGON_STATE_MODEL="gemini-1.5-pro-latest"
+GOOGLE_ENTRYPOINT='gunicorn --bind :$PORT oregon-state-expert.agent.agent:app'
+```
+
+---
+
+## Production: GCP Secret Manager
+
+In production on GCP Cloud Run, use GCP Secret Manager instead of `.env` files to store sensitive values. Mount secrets as environment variables in your Cloud Run service configuration or reference them in `cloudbuild.yaml`.
+
+<Info>
+  The `deploy.sh` script reads `GCP_PROJECT_ID` and `GCP_REGION` from your local `.env` file when deploying manually. These two variables do not need to be in Secret Manager — they are non-sensitive build configuration.
+</Info>

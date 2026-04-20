@@ -1,0 +1,157 @@
+---
+title: "A2A protocol: JSON-RPC 2.0 agent communication"
+description: "Complete reference for the A2A protocol used in OpenBeavs — discovery cards, message format, response structure, and streaming behavior."
+---
+
+The A2A (Agent-to-Agent) protocol is the communication backbone of OpenBeavs. It is an open protocol built on JSON-RPC 2.0 over plain HTTP POST, designed so that any service — regardless of language, framework, or cloud provider — can interoperate with the hub and with other agents. Every agent in the system, including the hub itself, must comply with it.
+
+## What is A2A?
+
+A2A standardizes two things: how an agent *advertises itself* (the discovery card), and how agents *exchange messages* (JSON-RPC 2.0 requests and responses). By fixing these two surfaces, OpenBeavs can add or remove agents without changing any hub code.
+
+The hub's message relay lives in `front/backend/open_webui/routers/agents.py` → `send_message_to_agent()`, and in the prototype backend at `back/main.py` → `generate_agent_response()`. Both construct identical JSON-RPC payloads and POST them to the agent's endpoint.
+
+## Agent discovery card
+
+Every A2A-compliant agent must serve a JSON document at `GET /.well-known/agent.json`. The hub fetches this URL during registration to learn the agent's name, capabilities, and skills.
+
+```json /.well-known/agent.json
+{
+  "name": "My Agent",
+  "description": "What this agent does",
+  "url": "https://myagent.example.com",
+  "version": "1.0.0",
+  "capabilities": { "streaming": true },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "skills": [
+    {
+      "id": "skill_id",
+      "name": "Skill Name",
+      "description": "What this skill does",
+      "tags": ["tag1", "tag2"],
+      "examples": ["example query 1"]
+    }
+  ]
+}
+```
+
+The hub's own discovery card (served by `back/main.py`) looks like this in practice:
+
+```json back/main.py — hub discovery card
+{
+  "capabilities": { "streaming": true },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "description": "OpenBeavs for agent coordination and management",
+  "name": "OpenBeavs",
+  "skills": [
+    {
+      "description": "Manages and coordinates AI agents",
+      "examples": ["list agents", "register agent", "chat with agent"],
+      "id": "agent_management",
+      "name": "Agent Management",
+      "tags": ["agent", "coordination", "management"]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": true,
+  "url": "https://your-hub.example.com",
+  "version": "1.0.0"
+}
+```
+
+<Note>
+  The `url` field in the discovery card is the agent's base homepage URL, not the JSON-RPC endpoint. When the hub routes a message it uses `agent.endpoint` (the JSON-RPC POST URL). If `endpoint` is not set it falls back to `agent.url`. Keep both accurate in your agent record.
+</Note>
+
+## Message format
+
+All inter-agent communication uses JSON-RPC 2.0 over HTTP POST. The hub sends a `message/send` request to the agent's endpoint:
+
+```json JSON-RPC 2.0 request
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "messageId": "550e8400-e29b-41d4-a716-446655440000",
+      "role": "user",
+      "parts": [{ "text": "Hello agent", "type": "text" }]
+    }
+  },
+  "id": 1
+}
+```
+
+Field notes:
+
+- `method` must be the literal string `"message/send"`.
+- `params.message.messageId` is a UUID generated fresh for each request.
+- `params.message.parts` is a list of part objects. Text parts carry both `"text"` and `"type": "text"`.
+- The top-level `"id"` is the JSON-RPC request correlation ID; the hub uses `1` by convention.
+
+The hub constructs this payload inside `generate_agent_response()` in `back/main.py:565–578`.
+
+## Response format
+
+An agent must return a valid JSON-RPC 2.0 response. The hub extracts the reply text from `result.artifacts[].parts[].text`:
+
+```json JSON-RPC 2.0 response
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "artifacts": [
+      {
+        "parts": [
+          {
+            "text": "Hello! This is my response."
+          }
+        ]
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+The built-in agents (claude-agent, chatgpt-agent, gemini-agent) return an extended result that also includes `messageId`, `role`, and `artifactId` fields:
+
+```json Extended response (built-in agents)
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "messageId": "a1b2c3d4-...",
+    "role": "agent",
+    "artifacts": [
+      {
+        "artifactId": "e5f6a7b8-...",
+        "parts": [{ "text": "Response text here" }]
+      }
+    ]
+  }
+}
+```
+
+<Tip>
+  The hub's prototype backend (`back/main.py:589–602`) tries several common field names (`response`, `output`, `content`, `message`) before falling back to `str(response_data)`. This makes it resilient to non-standard agents during development, but production agents should return the canonical `artifacts[].parts[].text` structure.
+</Tip>
+
+## Streaming behavior
+
+The A2A protocol does not natively support server-sent event streaming. OpenBeavs simulates streaming by receiving the agent's complete response and then replaying it word-by-word to the chat UI. From the agent developer's perspective, streaming requires no special implementation — return a normal JSON-RPC response and the hub handles the rest.
+
+The `capabilities.streaming` field in the discovery card signals *intent*, not a guarantee. Setting it to `true` tells the hub the agent supports streaming in principle; the hub's UI layer controls the actual word-by-word playback.
+
+## Path inconsistency note
+
+<Warning>
+  There is a known inconsistency between the two backends regarding the `/.well-known` path.
+
+  - `back/main.py` (`register_agent_by_url`) always strips the path from the provided URL and appends `/.well-known/agent.json` automatically.
+  - `front/backend/open_webui/routers/agents.py` may receive the full `/.well-known/agent.json` URL directly from the user.
+
+  When registering agents, be aware of which backend you are targeting. The safest input is always the base URL (e.g., `http://localhost:8001`), which both backends handle correctly.
+
+  Some ADK-generated agents also expose `/.well-known/agent-card.json` (with the `-card` suffix) as their discovery endpoint, which differs from the `agent.json` path the hub fetches. If registration fails, verify which path your agent actually serves.
+</Warning>

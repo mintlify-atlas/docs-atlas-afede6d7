@@ -1,0 +1,104 @@
+---
+title: "Discover and install AI agents from the registry"
+description: "Browse the OpenBeavs public agent registry to find community-built AI agents, install them into your workspace with one click, and start chatting immediately."
+---
+
+The agent registry is OpenBeavs's public showcase of A2A-compatible AI agents. Any agent that has been published to the registry is visible to everyone on the hub — you can read its description, review its skills, check its version, and install it into your own workspace in seconds. Think of it as an app store, but for AI assistants that speak the same open protocol and can collaborate with each other.
+
+## Registry vs. installed agents
+
+It helps to understand the two distinct places agents live in OpenBeavs:
+
+<CardGroup cols={2}>
+  <Card title="Registry" icon="globe">
+    The **public showcase** — a read-only catalog of agents that community members and OSU teams have published. Browsing here does not add anything to your workspace.
+  </Card>
+  <Card title="Workspace › Agents" icon="robot">
+    Your **active agents** — agents you have installed and can select in the chat model dropdown. Only installed agents appear when you start a conversation.
+  </Card>
+</CardGroup>
+
+## Browsing the registry
+
+Navigate to **Workspace › Agents** in the left sidebar. The page shows every agent that has been published to the public registry. Each agent card displays:
+
+- **Name** — the agent's display name
+- **Description** — what the agent does and what topics it handles
+- **Skills** — discrete capabilities the agent advertises (e.g., "Answer OSU admissions questions")
+- **Capabilities** — protocol features such as streaming support
+- **Version** — the published release number
+
+## Installing an agent
+
+<Steps>
+  <Step title="Open Workspace › Agents">
+    Click **Workspace** in the left-hand navigation, then select **Agents** from the submenu. You will see the full list of available agents.
+  </Step>
+  <Step title="Click the + button">
+    In the top-right corner of the Agents page, click the **+** (Add Agent) button to open the installation dialog.
+  </Step>
+  <Step title="Enter the agent URL">
+    Paste the agent's base URL into the input field — for example, `https://osu-expert.example.com`. OpenBeavs fetches the agent's `/.well-known/agent.json` discovery card automatically to populate its name, description, skills, and capabilities.
+
+    <Note>
+      If the agent server is not reachable, you will see an "Error fetching agent's .well-known/agent.json" message. Make sure the agent is running before attempting to install.
+    </Note>
+  </Step>
+  <Step title="Click Add">
+    Confirm by clicking **Add**. The agent is now installed in your hub and will appear in the chat model dropdown on your next conversation.
+  </Step>
+</Steps>
+
+<Tip>
+  For local agents running on your machine, you can enter either `localhost:8001` or `http://localhost:8001` — OpenBeavs will normalise the URL either way.
+</Tip>
+
+## What each agent card shows
+
+Once installed, opening an agent's detail view shows the full contents of its discovery card:
+
+| Field | Description |
+|---|---|
+| **Name** | Human-readable agent name |
+| **Description** | Summary of the agent's purpose and domain |
+| **Version** | SemVer release string (e.g., `1.0.0`) |
+| **Capabilities** | Protocol features advertised by the agent (e.g., `streaming: true`) |
+| **Skills** | Named sub-tasks the agent can perform, each with a description, tags, and example queries |
+| **Input / Output modes** | Data formats the agent accepts and returns (currently `text`) |
+
+## Registering your own agent to the public registry
+
+If you have built an A2A-compatible agent and want other OSU users to discover it, you can submit it to the public registry.
+
+<Steps>
+  <Step title="Build a compliant agent">
+    Your agent must serve a valid discovery card at `/.well-known/agent.json`. See the [building agents guide](/agents/building-agents) for the full specification and a Python starter template.
+  </Step>
+  <Step title="Deploy your agent to a public URL">
+    The registry URL must be reachable from the OpenBeavs hub. Deploy to any public host — Google Cloud Run, Fly.io, or your own server.
+  </Step>
+  <Step title="Submit to the registry">
+    Use the **Publish to Registry** option when creating an internally-hosted agent, or contact the OpenBeavs team to submit an external agent URL for review.
+  </Step>
+</Steps>
+
+<Info>
+  Agents published to the registry are visible to all authenticated users of the hub. Do not publish agents that expose sensitive internal APIs or private data.
+</Info>
+
+## Troubleshooting
+
+<Accordion title="The agent I installed doesn't appear in the chat model dropdown">
+  After installation, try refreshing the browser page. If the agent still does not appear, check that the agent server is running and responding at its registered URL. You can verify by navigating to **Workspace › Agents** and confirming the agent is listed there.
+</Accordion>
+
+<Accordion title="I get 'Error fetching agent's .well-known/agent.json' when adding an agent">
+  This means OpenBeavs could not reach the agent's discovery endpoint. Confirm:
+  - The agent server is running.
+  - The URL you entered is correct (include `http://` or `https://`).
+  - For remote agents, the URL is publicly accessible and uses HTTPS.
+</Accordion>
+
+<Accordion title="An agent is listed in the registry but I can't install it">
+  Registry entries and installable agents are independent. A registry entry only points to a public URL — if the agent service behind that URL is offline, installation will fail. Try again later or contact the agent's author.
+</Accordion>

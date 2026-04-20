@@ -1,0 +1,93 @@
+---
+title: "OpenBeavs REST API overview and authentication"
+description: "Complete reference for the OpenBeavs REST API: base URLs, authentication with Bearer tokens, available endpoint groups, and common error codes."
+---
+
+The OpenBeavs REST API lets you programmatically manage agents, chat threads, and the public agent registry. It is served by a FastAPI backend and follows standard HTTP conventions, returning JSON for all responses. Two separate backends are available: the **prototype** backend (port 8000, in-memory storage) and the **production** backend (port 8080, SQLite/Peewee ORM with full authentication). Most integrations should target the production backend.
+
+## Base URLs
+
+| Environment | Base URL |
+|---|---|
+| Local — prototype | `http://localhost:8000` |
+| Local — production | `http://localhost:8080` |
+| Cloud Run (production) | Your Cloud Run service URL (e.g. `https://openbeavs-deploy-test-xxxx-uw.a.run.app`) |
+
+<Note>
+The prototype backend (`back/main.py`) runs in-memory and resets on restart. Use it only for local development and testing. All persistent, authenticated work should go through the production backend at port 8080.
+</Note>
+
+## Authentication
+
+The production backend requires a Bearer token on every request. Obtain your API key from the OpenBeavs web UI and include it in the `Authorization` header.
+
+**Getting your API key:**
+
+1. Open OpenBeavs at `http://localhost:8080` (or your Cloud Run URL).
+2. Log in to your account.
+3. Navigate to **Settings → Account**.
+4. Copy the value shown under **API Key**.
+
+**Using the API key:**
+
+```bash
+curl http://localhost:8080/api/agents \
+  -H "Authorization: Bearer <your-api-key>"
+```
+
+<Warning>
+The prototype backend at `localhost:8000` does **not** enforce authentication. Never use it for production workloads or expose it to untrusted networks.
+</Warning>
+
+## Endpoint groups
+
+<CardGroup cols={2}>
+  <Card title="Agents" icon="robot" href="/api/agents">
+    Install, list, and manage A2A agents registered to your hub instance. Includes registering by URL and fetching well-known discovery cards.
+  </Card>
+  <Card title="Registry" icon="book-open" href="/api/registry">
+    Browse and publish agents to the public registry. The registry is a discoverable showcase separate from locally installed agents.
+  </Card>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Obtain API keys and session tokens. Use Bearer token auth on all production API calls.
+  </Card>
+  <Card title="Chats" icon="message" href="/api/chats">
+    Create and manage conversation threads with agents. Send messages and retrieve message history.
+  </Card>
+  <Card title="A2A Discovery" icon="magnifying-glass" href="/api/a2a-discovery">
+    The `/.well-known/agent.json` discovery card endpoint. Every A2A-compliant agent — including OpenBeavs itself — exposes this endpoint.
+  </Card>
+  <Card title="A2A Messages" icon="paper-plane" href="/api/a2a-messages">
+    The `POST /jsonrpc` endpoint for sending JSON-RPC 2.0 messages to agents using the A2A protocol.
+  </Card>
+</CardGroup>
+
+## Which backend serves which endpoints?
+
+| Endpoint prefix | Prototype (`localhost:8000`) | Production (`localhost:8080`) |
+|---|---|---|
+| `/chats` | `GET /chats`, `POST /chats`, etc. | `GET /api/chats`, `POST /api/chats`, etc. |
+| `/agents` | `GET /agents`, `POST /agents/register`, etc. | `GET /api/agents`, `POST /api/agents/register`, etc. |
+| `/api/registry` | Not available | `GET /api/registry`, `POST /api/registry`, etc. |
+| `/api/auths` | Not available | `POST /api/auths/signin`, etc. |
+| `/jsonrpc` | `POST /jsonrpc` | Not available (agents expose their own endpoint) |
+| `/.well-known/agent.json` | Available on hub (`localhost:8000`) | Available on hub (`localhost:8080`) and on each agent |
+
+## Common error codes
+
+| HTTP Status | Meaning | How to resolve |
+|---|---|---|
+| `400 Bad Request` | Missing or invalid request body, malformed URL, or a business-rule violation (e.g. duplicate agent URL). | Check the `detail` field in the JSON response for a specific message. |
+| `401 Unauthorized` | Missing, expired, or invalid Bearer token. | Regenerate your API key in **Settings → Account** and retry with a fresh token. |
+| `404 Not Found` | The requested resource (chat, agent, registry entry) does not exist. | Verify the ID or URL you are using. |
+| `503 Service Unavailable` | The hub could not reach the remote A2A agent endpoint. | Confirm the agent is running and its endpoint URL is reachable from the hub. |
+
+All error responses follow the FastAPI/HTTP convention:
+
+```json
+{
+  "detail": "Agent not found"
+}
+```
+
+JSON-RPC errors (from `POST /jsonrpc` or agent endpoints) use the JSON-RPC 2.0 error envelope instead — see the [A2A Messages](/api/a2a-messages) page for details.

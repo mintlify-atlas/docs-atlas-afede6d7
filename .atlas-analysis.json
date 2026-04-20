@@ -1,0 +1,106 @@
+{
+  "projectType": "saas",
+  "projectName": "OpenBeavs",
+  "projectDescription": "An AI agent hub for Oregon State University that lets students and faculty sign in with their OSU account and interact with a registry of specialized AI agents via the open A2A (Agent-to-Agent) protocol.",
+  "theme": "almond",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "local-setup"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/agent-registry",
+              "features/chat-interface",
+              "features/osu-knowledge-base",
+              "features/authentication"
+            ]
+          },
+          {
+            "group": "Agent Development",
+            "pages": [
+              "agents/overview",
+              "agents/a2a-protocol",
+              "agents/building-agents",
+              "agents/built-in-agents"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/api-keys",
+              "configuration/environment-variables"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/gcp-cloud-run",
+              "deployment/ci-cd"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Backend API",
+            "pages": [
+              "api/overview",
+              "api/agents",
+              "api/registry",
+              "api/authentication",
+              "api/chats"
+            ]
+          },
+          {
+            "group": "A2A Protocol",
+            "pages": [
+              "api/a2a-discovery",
+              "api/a2a-messages"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "OSU Microsoft SSO authentication — sign in with existing OSU credentials",
+    "Agent registry for discovering and installing community-built AI agents",
+    "A2A (Agent-to-Agent) protocol over JSON-RPC 2.0 for standardized inter-agent communication",
+    "OSU RAG knowledge base — answers questions about Oregon State University using crawled *.oregonstate.edu data",
+    "Multi-agent pipelines — agents can collaborate and route tasks to each other",
+    "Support for Claude, ChatGPT, and Gemini as standalone A2A agent servers",
+    "Full-stack SvelteKit frontend with FastAPI/SQLite production backend",
+    "One-command Docker deployment and automated GCP Cloud Run CI/CD"
+  ],
+  "publicApiSurface": [
+    "GET /.well-known/agent.json — A2A agent discovery card",
+    "POST /jsonrpc — JSON-RPC 2.0 message/send endpoint",
+    "GET /api/agents — list installed agents",
+    "POST /api/agents/register — manually register an A2A agent",
+    "POST /api/agents/register-by-url — register agent by fetching its well-known card",
+    "GET /api/registry — browse public agent registry",
+    "POST /api/registry — submit an agent to the public registry",
+    "GET /api/chats — list chat threads",
+    "POST /api/chats — create a new chat thread",
+    "POST /api/auths — authentication (MS SSO + local)",
+    "GET /api/knowledge — RAG knowledge base management",
+    "GET /api/v1/configs/a2a_agents — get A2A agent configuration",
+    "POST /api/v1/configs/a2a_agents/verify — verify agent connection"
+  ]
+}

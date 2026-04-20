@@ -1,0 +1,154 @@
+---
+title: "Deploy OpenBeavs to Google Cloud Run"
+description: "Manually deploy OpenBeavs to Google Cloud Run using deploy.sh. Covers gcloud authentication, image build and push, and service configuration for us-west1."
+---
+
+The `deploy.sh` script provides a manual path to deploy OpenBeavs to Google Cloud Run when you need to ship a change outside of the automated CI/CD pipeline. It reads your GCP project and region from `.env`, builds separate Docker images for the backend and frontend, pushes them to Google Container Registry, and rolls out each service on Cloud Run — all in a single command.
+
+## Prerequisites
+
+- **gcloud CLI** — [Install the Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+- **Docker** — must be running locally before the script executes
+- A `.env` file in the repository root with `GCP_PROJECT_ID` and `GCP_REGION` set
+
+<Note>
+  The automated CI/CD pipeline (triggered by merging to `main`) uses `cloudbuild.yaml` and does not require running `deploy.sh` manually. Use this script only when you need an out-of-band deployment.
+</Note>
+
+## Deployment steps
+
+<Steps>
+  <Step title="Authenticate with Google Cloud">
+    Log in with your Google account and configure Docker to push to GCR:
+
+    ```bash
+    gcloud auth login
+    gcloud auth configure-docker
+    ```
+
+    The first command opens a browser window for OAuth. The second configures Docker credential helpers so it can push to `gcr.io` without a separate `docker login`.
+  </Step>
+
+  <Step title="Set environment variables">
+    Ensure your `.env` file in the repository root contains at minimum:
+
+    ```bash
+    GCP_PROJECT_ID=your-gcp-project-id
+    GCP_REGION=us-west1
+    ```
+
+    The script sources this file at startup and will exit immediately if either variable is missing or the file does not exist:
+
+    ```
+    Error: GCP_PROJECT_ID or GCP_REGION not set in .env.
+    ```
+
+    <Warning>
+      Never commit `.env` to version control. For production secrets, use GCP Secret Manager instead of `.env` values — see the environment variables section below.
+    </Warning>
+  </Step>
+
+  <Step title="Run the deployment script">
+    From the repository root:
+
+    ```bash
+    ./deploy.sh
+    ```
+
+    The script performs the following steps automatically:
+
+    1. Sources `.env` and validates `GCP_PROJECT_ID` and `GCP_REGION`
+    2. Verifies Docker is running
+    3. Verifies you have an active `gcloud` session
+    4. Builds the backend image and pushes it to `gcr.io/$GCP_PROJECT_ID/genesis-ai-hub-backend:latest`
+    5. Deploys `genesis-ai-hub-backend` to Cloud Run
+    6. Captures the live backend URL and passes it as `REACT_APP_BACKEND_URL` to the frontend build
+    7. Builds the frontend image and pushes it to `gcr.io/$GCP_PROJECT_ID/genesis-ai-hub-frontend:latest`
+    8. Deploys `genesis-ai-hub-frontend` to Cloud Run
+
+    Successful output ends with:
+
+    ```
+    Backend deployed to: https://<your-backend-url>.run.app
+    Frontend deployed!
+    ```
+  </Step>
+
+  <Step title="Confirm the deployment">
+    Open the GCP Console, navigate to **Cloud Run**, and verify both services show a green checkmark and the latest revision is serving traffic. The production service managed by the CI/CD pipeline is named `openbeavs-deploy-test` (us-west1).
+  </Step>
+</Steps>
+
+## Cloud Run service specs
+
+The CI/CD-managed production service (`openbeavs-deploy-test`) is deployed with the following resource allocation:
+
+| Setting | Value |
+|---|---|
+| Service name | `openbeavs-deploy-test` |
+| Region | `us-west1` |
+| CPU | 4 vCPU |
+| Memory | 8 GiB |
+| Port | `8080` |
+| Execution environment | gen2 |
+| Request timeout | 600 s |
+| Authentication | Unauthenticated (public) |
+
+## Environment variables in production
+
+Cloud Run injects environment variables at deployment time. For sensitive values, store them in **GCP Secret Manager** and reference them as secrets in your Cloud Run service configuration — never pass API keys or credentials through plaintext `--set-env-vars`.
+
+Key variables the production backend expects:
+
+| Variable | Purpose |
+|---|---|
+| `WEBUI_SECRET_KEY` | JWT signing key — rotate this in production |
+| `HOST` | Bind address (`0.0.0.0`) |
+| `ENV` | Runtime environment (`prod`) |
+| `OFFLINE_MODE` | Prevents HuggingFace model downloads at startup |
+| `GEMINI_API_KEY` | Gemini model access for agents |
+| `OPENAI_API_KEY` | Optional — OpenAI proxy support |
+
+## Viewing logs
+
+Navigate to **Cloud Run → openbeavs-deploy-test → Logs** in the GCP Console, or stream them from the CLI:
+
+```bash
+gcloud run services logs read openbeavs-deploy-test \
+  --region=us-west1 \
+  --limit=100
+```
+
+## Rolling back
+
+If a deployment introduces a regression, revert to the previous stable revision without redeploying:
+
+1. Open **Cloud Run → openbeavs-deploy-test → Revisions** in the GCP Console.
+2. Find the last known-good revision.
+3. Click **Manage Traffic** and route 100% of traffic to that revision.
+
+<Tip>
+  Every image pushed by the CI/CD pipeline is tagged with both the commit SHA and `latest`. If you need to redeploy a specific commit, reference its SHA tag directly in `gcloud run deploy --image`.
+</Tip>
+
+## Troubleshooting
+
+<Accordion title="Error: Docker is not running">
+  The script checks `docker info` before proceeding. Start Docker Desktop or run `sudo systemctl start docker` on Linux, then re-run `./deploy.sh`.
+</Accordion>
+
+<Accordion title="Error: You are not logged into Google Cloud">
+  Run `gcloud auth login` to authenticate, then re-run the script. The script checks for an active account via `gcloud auth list --filter=status:ACTIVE`.
+</Accordion>
+
+<Accordion title="Permission denied on ./deploy.sh">
+  The script may not be executable. Fix it with:
+
+  ```bash
+  chmod +x deploy.sh
+  ```
+</Accordion>
+
+<Accordion title="Build fails with out-of-memory error">
+  The frontend build sets `NODE_OPTIONS=--max-old-space-size=4096`. If your build machine has less than 4 GiB available to Docker, increase the Docker Desktop memory limit in **Settings → Resources**.
+</Accordion>

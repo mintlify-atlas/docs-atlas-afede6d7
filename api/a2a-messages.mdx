@@ -1,0 +1,290 @@
+---
+title: "POST /jsonrpc — send messages via A2A protocol"
+description: "Full reference for the A2A JSON-RPC 2.0 message endpoint: request format, response format, all supported methods, and error codes."
+---
+
+The A2A (Agent-to-Agent) protocol uses JSON-RPC 2.0 over HTTP POST for all inter-agent communication. On the prototype backend this endpoint lives at `POST /jsonrpc`. On production agents (including those built with Google ADK), the JSON-RPC handler is typically the agent's root `POST /` endpoint or a dedicated path the agent exposes. OpenBeavs sends these requests automatically when you use the Chats API or the `POST /api/agents/{agent_id}/message` endpoint — but you can also call agents directly for testing and integration work.
+
+---
+
+## POST /jsonrpc (prototype hub)
+
+The prototype backend at `localhost:8000` exposes a single JSON-RPC dispatcher at `POST /jsonrpc`. Send any supported method body to this endpoint:
+
+```bash
+curl -X POST http://localhost:8000/jsonrpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "message": {
+        "messageId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "role": "user",
+        "parts": [
+          {"text": "Hello, Cyrano. Write me a poem.", "type": "text"}
+        ]
+      },
+      "chat_id": "c1d2e3..."
+    },
+    "id": 1
+  }'
+```
+
+---
+
+## Request format
+
+All JSON-RPC 2.0 requests share the same envelope:
+
+<ParamField body="jsonrpc" type="string" required>
+  Must be exactly `"2.0"`.
+</ParamField>
+
+<ParamField body="method" type="string" required>
+  The method name to invoke. See [Supported methods](#supported-methods) below.
+</ParamField>
+
+<ParamField body="params" type="object" required>
+  Method-specific parameters. See the per-method sections below for the exact shape.
+</ParamField>
+
+<ParamField body="id" type="integer | string">
+  Client-supplied request identifier. Returned unchanged in the response to allow request-response correlation. Defaults to `1` when sent by the hub.
+</ParamField>
+
+---
+
+## Supported methods
+
+### message/send
+
+The primary method for conversational interaction. Sends a user message to an agent and receives a synchronous reply.
+
+**`params` shape:**
+
+<ParamField body="params.message" type="object" required>
+  The A2A message object to deliver to the agent.
+  <Expandable title="message object properties">
+    <ParamField body="messageId" type="string" required>
+      A UUID uniquely identifying this message. The hub generates a new `uuid4` for each call.
+    </ParamField>
+    <ParamField body="role" type="string" required>
+      Always `"user"` when sending from the hub to an agent.
+    </ParamField>
+    <ParamField body="parts" type="array of objects" required>
+      The message content as a list of part objects.
+      <Expandable title="part object properties">
+        <ParamField body="text" type="string" required>
+          The text content of this part.
+        </ParamField>
+        <ParamField body="type" type="string" required>
+          Always `"text"` for plain-text parts.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="params.chat_id" type="string">
+  Optional. The hub's internal chat thread ID. Used by the prototype's `SendMessageRequest` handler to update the correct message thread.
+</ParamField>
+
+**Full request example:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "messageId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "role": "user",
+      "parts": [
+        {"text": "Hello, what can you help me with?", "type": "text"}
+      ]
+    }
+  },
+  "id": 1
+}
+```
+
+**Successful response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "artifacts": [
+      {
+        "parts": [
+          {
+            "text": "Ah, dear interlocutor! I can help you with..."
+          }
+        ]
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+<ResponseField name="result.artifacts" type="array of objects">
+  The agent's response, structured as a list of artifact objects.
+  <Expandable title="artifact object properties">
+    <ResponseField name="parts" type="array of objects">
+      The response content parts.
+      <Expandable title="part object properties">
+        <ResponseField name="text" type="string">
+          The text content of the response part.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### GetTaskRequest
+
+Retrieves the status and result of a previously submitted task by its ID. The prototype returns a placeholder response; a full implementation would track async task execution.
+
+**`params` shape:**
+
+<ParamField body="params.task_id" type="string" required>
+  The ID of the task to retrieve.
+</ParamField>
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "GetTaskRequest",
+  "params": {"task_id": "task-uuid"},
+  "id": 2
+}
+```
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "task_id": "task-uuid",
+    "status": "completed",
+    "result": "Task result placeholder"
+  },
+  "id": 2
+}
+```
+
+---
+
+### CancelTaskRequest
+
+Requests cancellation of an in-progress task.
+
+**`params` shape:**
+
+<ParamField body="params.task_id" type="string" required>
+  The ID of the task to cancel.
+</ParamField>
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "CancelTaskRequest",
+  "params": {"task_id": "task-uuid"},
+  "id": 3
+}
+```
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {"task_id": "task-uuid", "cancelled": true},
+  "id": 3
+}
+```
+
+---
+
+### SendStreamingMessageRequest
+
+Functionally equivalent to `message/send` in the current prototype (full streaming is not yet implemented). The hub uses it to signal streaming intent; agents that support streaming may respond with chunked data.
+
+The request and response shapes are identical to `message/send`.
+
+---
+
+## Calling agents directly
+
+Production agents (built with Google ADK) handle `message/send` at their root `POST /` endpoint. The format is the same JSON-RPC 2.0 envelope:
+
+```bash
+# Call Cyrano directly (bypassing the hub)
+curl -X POST http://localhost:8001 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "messageId": "test-123",
+      "message": {
+        "messageId": "test-123",
+        "role": "user",
+        "parts": [{"text": "Hello!", "type": "text"}]
+      }
+    },
+    "id": 1
+  }'
+```
+
+You can also send a message through the hub using `POST /api/agents/{agent_id}/message`:
+
+```bash
+curl -X POST http://localhost:8080/api/agents/cyrano_agent/message \
+  -H "Authorization: Bearer <your-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Write me a sonnet about Oregon."}'
+```
+
+---
+
+## Error codes
+
+### JSON-RPC 2.0 errors
+
+JSON-RPC errors are returned in the `error` field of the response envelope, never as HTTP error status codes (the HTTP status is always `200` for a well-formed JSON-RPC response):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32602,
+    "message": "Missing chat_id parameter"
+  },
+  "id": 1
+}
+```
+
+| Code | Meaning |
+|---|---|
+| `-32700` | Parse error — the request body is not valid JSON. |
+| `-32601` | Method not found — the requested method is not registered. |
+| `-32602` | Invalid params — a required parameter is missing or malformed (e.g. missing `chat_id` or `task_id`). |
+| `-32603` | Internal error — an unhandled exception occurred in the handler. |
+| `-32004` | Agent not found — used by internally-hosted agents when the `agent_id` does not match a deployed agent. |
+| `404` | Agent not found — returned by `SendMessageRequest` in the prototype when the chat's agent is not registered. |
+
+### HTTP errors
+
+Some agent-relay endpoints use standard HTTP error codes:
+
+| HTTP Status | Meaning |
+|---|---|
+| `404` | The agent ID passed to `POST /api/agents/{agent_id}/message` does not exist. |
+| `400` | The agent has no `endpoint` or `url` configured. |
+| `503` | The hub could not reach the remote agent's endpoint. |

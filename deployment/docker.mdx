@@ -1,0 +1,156 @@
+---
+title: "Run OpenBeavs locally with Docker Compose"
+description: "Spin up the full OpenBeavs stack on your machine using Docker Compose. Runs the SvelteKit frontend and FastAPI backend with a single Make command."
+---
+
+The `Makefile` at the repository root provides commands for installing dependencies and running each service. `make install` sets up the frontend and backend dependencies in one step, then you start each service in its own terminal. The app is available at `http://localhost:5173` (frontend) and `http://localhost:8000` (backend).
+
+## Prerequisites
+
+Before you begin, make sure the following are installed on your machine:
+
+- **Docker** — [docker.com](https://www.docker.com/) (required for containerised deployments)
+- **Node.js 20+** — required for the SvelteKit frontend
+- **Python 3.11+** — required for the FastAPI backend
+
+## Quick start
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/OpenBeavs/OpenBeavs.git
+    cd OpenBeavs
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Copy the example environment file and fill in the required values before starting any services.
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Open `.env` in your editor and supply the values for your local setup. Key variables include:
+
+    | Variable | Purpose |
+    |---|---|
+    | `DATABASE_URL` | SQLite/PostgreSQL connection string |
+    | `SECRET_KEY` | JWT signing key |
+    | `GEMINI_API_KEY` | Gemini model access (agents + hub) |
+    | `PORT` | Backend server port (default: `8080`) |
+    | `OPENAI_API_KEY` | Optional — OpenAI proxy support |
+    | `OLLAMA_BASE_URL` | Optional — Ollama proxy support |
+
+    <Warning>
+      Never commit your `.env` file. It is already listed in `.gitignore`, but double-check before pushing any branches.
+    </Warning>
+  </Step>
+
+  <Step title="Install all dependencies">
+    ```bash
+    make install
+    ```
+
+    This installs frontend dependencies (`npm install` in `front/`) and backend hub dependencies (`pip install -r requirements.txt` in `back/`). When the command completes you will see:
+
+    ```
+    ✅ Done. Run 'make dev-front' and 'make dev-hub' in separate terminals.
+    ```
+  </Step>
+
+  <Step title="Start the frontend and backend">
+    Open two separate terminal windows and run one command in each:
+
+    ```bash
+    # Terminal 1 — SvelteKit frontend (http://localhost:5173)
+    make dev-front
+    ```
+
+    ```bash
+    # Terminal 2 — A2A hub backend (http://localhost:8000)
+    make dev-hub
+    ```
+
+    Both servers use hot-reload so changes are reflected immediately.
+  </Step>
+
+  <Step title="Verify the stack is healthy">
+    Hit the backend health endpoint to confirm the API is up:
+
+    ```bash
+    curl http://localhost:8000/health
+    ```
+
+    A `200 OK` response with `{"status": "ok", "agents": N}` confirms the backend is running.
+  </Step>
+</Steps>
+
+## All Make commands
+
+<CodeGroup>
+```bash Install dependencies
+make install
+```
+
+```bash Start frontend dev server (port 5173)
+make dev-front
+```
+
+```bash Start backend hub (port 8000, hot-reload)
+make dev-hub
+```
+
+```bash Build frontend and copy to backend static dir
+make build
+```
+
+```bash Lint frontend + backend
+make lint
+```
+
+```bash Format frontend (Prettier) + backend (Ruff)
+make format
+```
+
+```bash Run all tests
+make test
+```
+
+```bash Remove build artifacts and caches
+make clean
+```
+</CodeGroup>
+
+Run `make help` at any time to see the full list of available commands with descriptions.
+
+## What runs where
+
+| Service | Technology | Port | Command |
+|---|---|---|---|
+| Frontend (dev) | SvelteKit (Vite) | `5173` | `make dev-front` |
+| Backend hub | FastAPI + Uvicorn | `8000` | `make dev-hub` |
+| Production backend | FastAPI + Uvicorn | `8080` | see [local-setup](/local-setup) |
+
+The **hub backend** (`back/`) is the lightweight A2A coordinator used during development. For the full production backend with SQLite persistence and authentication, see the [local setup guide](/local-setup).
+
+<Tip>
+  For individual service setup, API key configuration (Claude, ChatGPT, Gemini), and the A2A quickstart, see the per-service READMEs at `front/README.md`, `back/README.md`, and `front/A2A_QUICKSTART.md`.
+</Tip>
+
+## Troubleshooting
+
+<Accordion title="Port 5173 or 8000 is already in use">
+  Another process is binding to the same port. Find and stop it:
+
+  ```bash
+  # macOS / Linux
+  lsof -i :5173
+  lsof -i :8000
+  ```
+
+  Alternatively, set a custom port in the relevant npm or uvicorn command.
+</Accordion>
+
+<Accordion title="Frontend builds but the page is blank">
+  The SvelteKit build may have failed. Check the terminal running `make dev-front` for errors. A common cause is a missing environment variable. Make sure all required variables are set in `.env` before restarting.
+</Accordion>

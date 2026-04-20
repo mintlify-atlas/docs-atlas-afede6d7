@@ -1,0 +1,108 @@
+---
+title: "Ask the OSU knowledge base anything"
+description: "Get accurate, up-to-date answers about Oregon State University — admissions, courses, financial aid, campus life, and more — powered by a live RAG pipeline."
+---
+
+The OSU knowledge base agent is a retrieval-augmented AI assistant that draws its answers directly from Oregon State University's official web presence. Instead of relying on a language model's training data — which may be out of date or simply wrong about OSU specifics — it searches a continuously refreshed index of `*.oregonstate.edu` pages and grounds every response in real source material. If OSU published it on their website, this agent can find and summarise it for you.
+
+## What you can ask
+
+The knowledge base is built to handle the kinds of questions OSU students and prospective applicants ask every day:
+
+<CardGroup cols={2}>
+  <Card title="Admissions" icon="graduation-cap">
+    Application deadlines, requirements, transfer credits, acceptance rates, and program-specific criteria.
+  </Card>
+  <Card title="Financial Aid" icon="dollar-sign">
+    Scholarships, FAFSA timelines, OSU grants, work-study programs, and tuition payment plans.
+  </Card>
+  <Card title="Courses & Academics" icon="book">
+    Course descriptions, prerequisites, degree requirements, schedule of classes, and academic calendars.
+  </Card>
+  <Card title="Campus Life" icon="building">
+    Housing options, dining, student clubs, recreation facilities, health services, and campus events.
+  </Card>
+  <Card title="Research Programs" icon="flask">
+    Faculty research areas, undergraduate research opportunities, graduate program details, and lab contacts.
+  </Card>
+  <Card title="Beaver Sports" icon="trophy">
+    Pac-12 schedules, ticket information, athletic facilities, and intramural sports programs.
+  </Card>
+</CardGroup>
+
+## Example interaction
+
+Here is the kind of exchange you can expect when chatting with the OSU knowledge base agent:
+
+```
+You:    What is the deadline to apply for financial aid for the 2025–2026 academic year,
+        and what forms do I need to submit?
+
+Agent:  Oregon State University's priority deadline for financial aid for the 2025–2026
+        academic year is February 28, 2025. To be considered for the full range of
+        OSU grants, scholarships, and work-study, you should:
+
+        1. Complete the FAFSA (Free Application for Federal Student Aid) at
+           studentaid.gov — use OSU's school code 003210.
+        2. Submit any additional documents requested by OSU's Office of Financial
+           Aid & Scholarships, which you can track through your MyOSU portal.
+
+        Applications submitted after the priority deadline are still reviewed but
+        may receive reduced aid packages. For the most current information, visit
+        financialaid.oregonstate.edu.
+```
+
+## How it stays up to date
+
+The OSU knowledge base is powered by a dedicated data pipeline that runs on a cron schedule:
+
+1. **BFS crawler** — a breadth-first-search spider continuously crawls `*.oregonstate.edu`, following links and collecting page content.
+2. **Embeddings** — crawled text is chunked and converted into vector embeddings that capture semantic meaning.
+3. **Firestore vector store** — embeddings are stored in Google Firestore, enabling fast similarity search at query time.
+
+When you ask a question, the agent searches this vector store for the most relevant OSU pages and uses that content to construct its answer — so responses reflect what is actually on OSU's website right now, not what a model learned during training months ago.
+
+<Info>
+  The crawler focuses on publicly accessible `oregonstate.edu` pages. Content that requires OSU login credentials (such as Canvas course materials or MyOSU portal pages) is not indexed.
+</Info>
+
+## How to install and use the agent
+
+The OSU knowledge base agent installs the same way as any other agent in OpenBeavs.
+
+<Steps>
+  <Step title="Open Workspace › Agents">
+    Navigate to **Workspace** in the left sidebar and click **Agents**.
+  </Step>
+  <Step title="Click + and enter the agent URL">
+    Click the **+** button, then enter the OSU knowledge base agent's URL. If you are running the platform locally, the `oregon-state-expert` agent runs on its own port — check the [local setup guide](/quickstart) for the exact address.
+  </Step>
+  <Step title="Click Add">
+    OpenBeavs fetches the agent's discovery card and registers it in your workspace.
+  </Step>
+  <Step title="Start a chat and select the agent">
+    Open a **New Chat**, click the model dropdown at the top, and select the OSU knowledge base agent. Ask your question in plain English.
+  </Step>
+</Steps>
+
+<Tip>
+  For the best results, ask specific questions rather than broad ones. "What are the prerequisites for CS 361?" will get a more precise answer than "Tell me about computer science."
+</Tip>
+
+## Under the hood (brief)
+
+For those curious about what powers the agent: it is built with the Google Agent Development Kit (ADK), uses Gemini as the underlying language model, and retrieves context from a Firestore vector store populated by the OSU RAG Pipeline — an open-source companion project at [github.com/OpenBeavs/OSU-RAG-Pipeline](https://github.com/OpenBeavs/OSU-RAG-Pipeline). You do not need to know any of this to use the agent.
+
+## Troubleshooting
+
+<Accordion title="The agent says it can't find information about a specific topic">
+  The knowledge base only covers publicly accessible `oregonstate.edu` pages. If the information you are looking for is behind an OSU login, on a third-party site, or very recently published, the agent may not have it yet. Try rephrasing your question or visit the relevant OSU department page directly.
+</Accordion>
+
+<Accordion title="The agent's answer contradicts what I see on the OSU website">
+  The crawler runs on a schedule, so there can be a short delay between when OSU updates a page and when the knowledge base reflects that change. For time-sensitive or official decisions (such as admission status), always verify with the primary OSU source.
+</Accordion>
+
+<Accordion title="I can't find the OSU knowledge base agent in the registry">
+  Make sure you are signed in and that the agent has been installed in your workspace. See [Discover and install AI agents](/features/agent-registry) for step-by-step installation instructions.
+</Accordion>
